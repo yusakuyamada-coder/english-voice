@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>発音トレーニング</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --pink: #FF6B8A;
+      --pink-light: #FFE8ED;
+      --purple: #A78BFA;
+      --purple-light: #EDE9FE;
+      --mint: #34D399;
+      --mint-light: #D1FAE5;
+      --yellow: #FBBF24;
+      --yellow-light: #FEF3C7;
+      --bg: #FFF5F7;
+      --card: #FFFFFF;
+      --text: #2D2540;
+      --gray: #9CA3AF;
+      --radius: 20px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 1rem 1rem 3rem;
+    }
+    .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 14px; }
+
+    /* ── ヘッダー ── */
+    .header {
+      background: linear-gradient(135deg, var(--pink) 0%, var(--purple) 100%);
+      border-radius: var(--radius);
+      padding: 1.2rem 1.4rem;
+      color: white;
+    }
+    .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .app-title { font-size: 15px; font-weight: 900; letter-spacing: 0.03em; }
+    .q-counter {
+      font-size: 12px; font-weight: 700;
+      background: rgba(255,255,255,0.25);
+      padding: 4px 12px; border-radius: 99px;
+    }
+    .progress-track { background: rgba(255,255,255,0.3); border-radius: 99px; height: 7px; overflow: hidden; }
+    .progress-bar { height: 100%; background: white; border-radius: 99px; width: 0%; transition: width 0.5s ease; }
+
+    /* ── カテゴリバッジ ── */
+    .category-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 14px; border-radius: 99px;
+      font-size: 12px; font-weight: 800; letter-spacing: 0.04em;
+      margin-bottom: 10px;
+    }
+    .cat-lr    { background: var(--pink-light);   color: var(--pink); }
+    .cat-th    { background: var(--purple-light);  color: var(--purple); }
+    .cat-vb    { background: var(--mint-light);    color: #059669; }
+    .cat-link  { background: var(--yellow-light);  color: #D97706; }
+
+    /* ── 問題カード ── */
+    .question-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 1.6rem 1.4rem;
+      border: 2px solid transparent;
+      box-shadow: 0 4px 20px rgba(167,139,250,0.12);
+      text-align: center;
+    }
+    .phonetic-hint {
+      font-size: 12px; color: var(--gray); font-weight: 600;
+      background: #F9FAFB; border-radius: 8px;
+      padding: 6px 12px; display: inline-block; margin-bottom: 14px;
+      font-style: italic;
+    }
+    .question-en {
+      font-size: 22px; font-weight: 800; color: var(--text);
+      line-height: 1.5; margin-bottom: 6px;
+    }
+    .question-ja {
+      font-size: 13px; color: var(--gray); font-weight: 600;
+    }
+
+    /* ── お手本音声プレーヤー ── */
+    .model-audio-wrap {
+      background: linear-gradient(135deg, var(--purple-light) 0%, var(--pink-light) 100%);
+      border-radius: 14px; padding: 12px 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .play-model-btn {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--purple) 0%, var(--pink) 100%);
+      border: none; color: white; cursor: pointer;
+      font-size: 16px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 3px 10px rgba(167,139,250,0.4);
+      transition: transform 0.15s;
+    }
+    .play-model-btn:hover { transform: scale(1.08); }
+    .play-model-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .model-audio-label { font-size: 12px; font-weight: 700; color: #6D28D9; }
+    .model-audio-sub   { font-size: 11px; color: var(--gray); }
+
+    /* ── 結果カード ── */
+    .result-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 1.4rem;
+      box-shadow: 0 4px 20px rgba(255,107,138,0.1);
+      display: none;
+    }
+    .result-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .score-circle {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--pink) 0%, var(--purple) 100%);
+      color: white; font-size: 18px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; box-shadow: 0 4px 12px rgba(255,107,138,0.4);
+    }
+    .score-label { font-size: 13px; color: var(--gray); font-weight: 600; }
+    .score-title { font-size: 16px; font-weight: 800; color: var(--text); }
+
+    /* ── 音声比較エリア ── */
+    .audio-compare {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;
+    }
+    .audio-box {
+      border-radius: 14px; padding: 10px 12px; text-align: center;
+    }
+    .audio-box.model-box {
+      background: var(--purple-light);
+    }
+    .audio-box.user-box {
+      background: var(--pink-light);
+    }
+    .audio-box-title { font-size: 10px; font-weight: 800; margin-bottom: 8px; letter-spacing: 0.05em; text-transform: uppercase; }
+    .model-box .audio-box-title { color: var(--purple); }
+    .user-box  .audio-box-title  { color: var(--pink); }
+    .mini-play-btn {
+      width: 38px; height: 38px; border-radius: 50%; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; margin: 0 auto;
+      font-size: 15px; transition: transform 0.15s;
+    }
+    .mini-play-btn:hover { transform: scale(1.1); }
+    .mini-play-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .model-box .mini-play-btn { background: var(--purple); color: white; box-shadow: 0 3px 8px rgba(167,139,250,0.4); }
+    .user-box  .mini-play-btn  { background: var(--pink);   color: white; box-shadow: 0 3px 8px rgba(255,107,138,0.4); }
+
+    /* ── 採点詳細 ── */
+    .score-details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+    .score-item { background: #F9FAFB; border-radius: 12px; padding: 10px 6px; text-align: center; }
+    .score-item-num  { font-size: 20px; font-weight: 900; color: var(--purple); }
+    .score-item-label { font-size: 10px; font-weight: 700; color: var(--gray); }
+
+    /* ── フィードバック ── */
+    .feedback-section { margin-bottom: 4px; }
+    .feedback-label {
+      font-size: 10px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--gray); margin-bottom: 6px;
+    }
+    .transcript-text {
+      background: #FFF5F7; border-radius: 10px;
+      padding: 10px 12px; font-size: 14px; font-weight: 600;
+      color: var(--text); line-height: 1.6; margin-bottom: 10px;
+    }
+    .feedback-text {
+      background: #F3F4F6; border-radius: 10px;
+      padding: 12px 14px; font-size: 13px;
+      line-height: 1.8; color: #374151;
+    }
+    /* 注意点のハイライト */
+    .feedback-text .highlight { color: var(--pink); font-weight: 800; }
+
+    .running-scores {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;
+    }
+    .mini-score-box { background: #F9FAFB; border-radius: 12px; padding: 10px; text-align: center; }
+    .mini-score-box .num { font-size: 20px; font-weight: 900; color: var(--purple); }
+    .mini-score-box .lbl { font-size: 10px; color: var(--gray); font-weight: 700; }
+
+    /* ── コントロール ── */
+    .controls { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .status-text { font-size: 13px; font-weight: 700; color: var(--gray); }
+
+    .rec-btn {
+      width: 82px; height: 82px; border-radius: 50%; border: none;
+      background: linear-gradient(135deg, var(--pink) 0%, var(--purple) 100%);
+      color: white; font-size: 34px; cursor: pointer;
+      box-shadow: 0 8px 24px rgba(255,107,138,0.45);
+      transition: transform 0.15s, box-shadow 0.15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .rec-btn:hover { transform: scale(1.05); }
+    .rec-btn.recording {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      box-shadow: 0 8px 24px rgba(239,68,68,0.5);
+      animation: pulse 1.2s infinite;
+    }
+    .rec-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+    .next-btn, .restart-btn {
+      width: 100%; padding: 14px; border: none; border-radius: 99px;
+      background: linear-gradient(135deg, var(--pink) 0%, var(--purple) 100%);
+      color: white; font-size: 15px; font-weight: 800;
+      cursor: pointer; display: none;
+      box-shadow: 0 4px 16px rgba(255,107,138,0.35);
+      transition: opacity 0.2s;
+    }
+    .next-btn:hover, .restart-btn:hover { opacity: 0.9; }
+
+    .retry-btn {
+      width: 100%; padding: 11px; background: white; color: var(--gray);
+      border: 1.5px solid #E5E7EB; border-radius: 99px;
+      font-size: 13px; font-weight: 700; cursor: pointer; display: none;
+      font-family: 'Nunito', sans-serif;
+    }
+    .retry-btn:hover { background: #F9FAFB; }
+
+    /* ── 分析中プログレス ── */
+    .progress-wrap { width: 100%; display: none; flex-direction: column; align-items: center; gap: 8px; }
+    .progress-wrap.show { display: flex; }
+    .progress-pct { font-size: 26px; font-weight: 900; color: var(--purple); }
+    .analysis-track { width: 100%; background: #E5E7EB; border-radius: 99px; height: 8px; overflow: hidden; }
+    .analysis-bar { height: 100%; background: linear-gradient(90deg, var(--pink), var(--purple)); border-radius: 99px; width: 0%; transition: width 0.4s; }
+    .progress-step { font-size: 12px; color: var(--gray); font-weight: 600; }
+
+    /* ── 最終カード ── */
+    .final-card {
+      background: var(--card); border-radius: var(--radius);
+      padding: 1.6rem 1.4rem; text-align: center;
+      box-shadow: 0 4px 20px rgba(167,139,250,0.15); display: none;
+    }
+    .final-emoji { font-size: 48px; margin-bottom: 8px; }
+    .final-title { font-size: 22px; font-weight: 900; color: var(--text); margin-bottom: 4px; }
+    .final-sub { font-size: 13px; color: var(--gray); font-weight: 600; margin-bottom: 16px; }
+    .final-score-big {
+      font-size: 64px; font-weight: 900; line-height: 1;
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 4px;
+    }
+    .final-score-label { font-size: 12px; color: var(--gray); font-weight: 700; margin-bottom: 20px; }
+    .final-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .final-box { background: #F9FAFB; border-radius: 14px; padding: 14px; }
+    .final-box .lbl { font-size: 10px; color: var(--gray); font-weight: 700; margin-bottom: 4px; }
+    .final-box .num { font-size: 28px; font-weight: 900; color: var(--purple); }
+
+    .cat-breakdown { text-align: left; }
+    .cat-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid #F3F4F6; font-size: 13px;
+    }
+    .cat-row:last-child { border-bottom: none; }
+    .cat-row-name { color: #555; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .cat-row-score { font-weight: 900; color: var(--purple); }
+
+    .final-msg {
+      background: linear-gradient(135deg, var(--pink-light), var(--purple-light));
+      border-radius: 14px; padding: 14px;
+      font-size: 13px; color: #6D28D9; font-weight: 700;
+      margin-top: 16px; text-align: center;
+    }
+
+    @keyframes pulse { 0%{transform:scale(1)} 50%{transform:scale(1.08)} 100%{transform:scale(1)} }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    .fade-up { animation: fadeUp 0.35s ease; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <div class="header" id="topBar">
+    <div class="header-top">
+      <span class="app-title">🗣️ 発音トレーニング</span>
+      <span class="q-counter" id="questionCounter">1 / 5問</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-bar" id="challengeBar"></div>
+    </div>
+  </div>
+
+  <!-- 問題カード -->
+  <div class="question-card fade-up" id="questionCard">
+    <div id="categoryBadge" class="category-badge cat-lr">🔤 L と R</div>
+    <div id="phoneticHint" class="phonetic-hint">発音のポイント：...</div>
+    <div id="questionEn" class="question-en">Loading...</div>
+    <div id="questionJa" class="question-ja">読み込み中...</div>
+    <div style="margin-top: 14px;">
+      <div class="model-audio-wrap">
+        <button class="play-model-btn" id="playModelBtn" onclick="playModelAudio()" title="お手本を聴く">▶</button>
+        <div>
+          <div class="model-audio-label">🎧 お手本を聴く</div>
+          <div class="model-audio-sub">ネイティブの発音を確認しよう</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 結果カード -->
+  <div class="result-card fade-up" id="resultCard">
+
+    <!-- スコアヘッダー -->
+    <div class="result-header">
+      <div class="score-circle" id="scoreBig">0</div>
+      <div>
+        <div class="score-title" id="scoreTitle">分析完了！</div>
+        <div class="score-label">総合スコア</div>
+      </div>
+    </div>
+
+    <!-- 音声比較 -->
+    <div class="audio-compare">
+      <div class="audio-box model-box">
+        <div class="audio-box-title">お手本</div>
+        <button class="mini-play-btn" id="resultModelBtn" onclick="playModelAudio()">▶</button>
+      </div>
+      <div class="audio-box user-box">
+        <div class="audio-box-title">あなた</div>
+        <button class="mini-play-btn" id="playUserBtn" onclick="playUserAudio()" disabled>▶</button>
+      </div>
+    </div>
+
+    <!-- 3項目スコア -->
+    <div class="score-details">
+      <div class="score-item">
+        <div class="score-item-num" id="accentScore">-</div>
+        <div class="score-item-label">アクセント</div>
+      </div>
+      <div class="score-item">
+        <div class="score-item-num" id="rhythmScore">-</div>
+        <div class="score-item-label">リズム</div>
+      </div>
+      <div class="score-item">
+        <div class="score-item-num" id="intonScore">-</div>
+        <div class="score-item-label">イントネーション</div>
+      </div>
+    </div>
+
+    <!-- 聞き取り -->
+    <div class="feedback-section">
+      <div class="feedback-label">聞き取り結果</div>
+      <div class="transcript-text" id="transcriptText"></div>
+    </div>
+
+    <!-- フィードバック -->
+    <div class="feedback-section">
+      <div class="feedback-label">🌸 フィードバック</div>
+      <div class="feedback-text" id="feedbackText"></div>
+    </div>
+
+    <!-- 累計スコア -->
+    <div class="running-scores">
+      <div class="mini-score-box">
+        <div class="lbl">Good（80点以上）</div>
+        <div class="num" id="goodCount">0 / 0</div>
+      </div>
+      <div class="mini-score-box">
+        <div class="lbl">平均スコア</div>
+        <div class="num" id="avgScore">-</div>
+      </div>
+    </div>
+
+    <button class="retry-btn" id="retryBtn" onclick="retryQuestion()">この問題をもう一度やり直す 🔄</button>
+  </div>
+
+  <!-- 最終カード -->
+  <div class="final-card fade-up" id="finalCard">
+    <div class="final-emoji">🎉</div>
+    <div class="final-title">チャレンジ完了！</div>
+    <div class="final-sub">5問お疲れ様でした✨</div>
+    <div class="final-score-big" id="finalScoreBig">-</div>
+    <div class="final-score-label">平均スコア</div>
+    <div class="final-grid">
+      <div class="final-box"><div class="lbl">Good（80点以上）</div><div class="num" id="finalGood">-</div></div>
+      <div class="final-box"><div class="lbl">最高スコア</div><div class="num" id="finalBest">-</div></div>
+    </div>
+    <div class="cat-breakdown" id="catBreakdown"></div>
+    <div class="final-msg" id="finalMsg"></div>
+  </div>
+
+  <!-- コントロール -->
+  <div class="controls">
+    <p id="statusText" class="status-text">🎤 ボタンを押して録音スタート</p>
+    <button class="rec-btn" id="recBtn" onclick="toggleRecord()">🎤</button>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-pct" id="progressPct">0%</div>
+      <div class="analysis-track"><div class="analysis-bar" id="analysisBar"></div></div>
+      <div class="progress-step" id="progressStep">音声を受信中...</div>
+    </div>
+    <button class="next-btn" id="nextBtn" onclick="nextQuestion()">次の問題へ ➔</button>
+    <button class="restart-btn" id="restartBtn" onclick="restartChallenge()">もう一度チャレンジ 🔄</button>
+  </div>
+
+</div>
+<script>
+// ── 問題データ ──────────────────────────────────────────────────
+const questionBank = [
+  // L と R
+  { en: "I really love long walks by the river.", ja: "川沿いの長い散歩が本当に好きです。", cat: "LR", hint: "「love」のL（舌先を上の歯茎に当てる）と「river」のR（舌を丸める）の違いに集中！" },
+  { en: "Light the lamp on the right side.", ja: "右側のランプに火をつけて。", cat: "LR", hint: "「light」「lamp」のL と「right」のR をしっかり区別しよう！" },
+  { en: "The library is really relaxing.", ja: "図書館は本当にリラックスできます。", cat: "LR", hint: "「library」の L で始まり「really」「relaxing」の R が続く難問！" },
+  { en: "Roll the ball slowly to the left.", ja: "ボールをゆっくり左に転がして。", cat: "LR", hint: "「Roll」のR と「left」のL をはっきり使い分けよう！" },
+  { en: "The red rose smells lovely.", ja: "赤いバラはとてもいい香りがします。", cat: "LR", hint: "「red rose」のRRと「lovely」のLを意識して！" },
+
+  // TH の発音
+  { en: "I think that three is enough.", ja: "3つで十分だと思います。", cat: "TH", hint: "「think」「that」「three」すべて TH！舌を軽く歯の間に挟んで息を出そう。" },
+  { en: "Thank you for the birthday present.", ja: "誕生日プレゼントをありがとう。", cat: "TH", hint: "「Thank」「the」「birthday」に TH が潜んでいる！" },
+  { en: "Those things are worth thinking about.", ja: "あれらのことは考える価値があります。", cat: "TH", hint: "「Those」「things」「thinking」と TH 連続！舌先をしっかり使って。" },
+  { en: "This is the third time this week.", ja: "今週これで3回目です。", cat: "TH", hint: "「This」「the」「third」「this」— TH づくしの文！" },
+  { en: "I breathe better through my nose.", ja: "鼻で呼吸する方が楽です。", cat: "TH", hint: "「breathe」は有声TH、「through」は無声TH。両方の使い分けがポイント！" },
+
+  // V と B の区別
+  { en: "Bring your best vest to the venue.", ja: "会場に一番いいベストを持ってきて。", cat: "VB", hint: "「Bring」「best」はB（唇を閉じてはじく）、「vest」「venue」はV（下唇を噛んで）！" },
+  { en: "I voted for the brave volunteer.", ja: "勇敢なボランティアに投票しました。", cat: "VB", hint: "「voted」「volunteer」はV 、「brave」はBとV両方！" },
+  { en: "The bold vegetable vendor is very busy.", ja: "その堂々とした野菜の売り子はとても忙しいです。", cat: "VB", hint: "「bold」はB、「vegetable」「vendor」「very」はV。下唇の使い方が違う！" },
+  { en: "Visit the beautiful village above the valley.", ja: "谷の上にある美しい村を訪れてください。", cat: "VB", hint: "「Visit」「village」「above」「valley」にV とB が混在！" },
+  { en: "Both beverages are available.", ja: "どちらの飲み物も入手可能です。", cat: "VB", hint: "「Both」はB、「beverages」はBとV、「available」もV！" },
+
+  // リンキング
+  { en: "Pick it up and put it away.", ja: "それを拾って片付けてください。", cat: "LINK", hint: "「Pick_it」「up_and」「put_it_away」のようにつなげて読もう！" },
+  { en: "Turn it off when you're done.", ja: "終わったら消してください。", cat: "LINK", hint: "「Turn_it」「off_when」自然につながると英語らしく聞こえる！" },
+  { en: "I'd like a cup of orange juice.", ja: "オレンジジュースを一杯ください。", cat: "LINK", hint: "「cup_of」「of_orange」とスムーズにつなげるのがポイント！" },
+  { en: "Give it a shot and find out.", ja: "試してみて確かめよう。", cat: "LINK", hint: "「Give_it」「shot_and」「find_out」— 全部リンクさせよう！" },
+  { en: "Switch it on and look it up.", ja: "スイッチを入れて調べてみて。", cat: "LINK", hint: "「Switch_it」「on_and」「look_it_up」全部つながる！" },
+];
+
+const CAT_INFO = {
+  LR:   { label: "L と R",       icon: "🔤", cls: "cat-lr"   },
+  TH:   { label: "TH の発音",    icon: "👅", cls: "cat-th"   },
+  VB:   { label: "V と B",       icon: "💋", cls: "cat-vb"   },
+  LINK: { label: "リンキング",   icon: "🔗", cls: "cat-link" },
+};
+
+const TOTAL = 5;
+let challengeQuestions = [];
+let currentIndex = 0;
+let scores = [];
+let catScores = {};
+let pendingScore = null;
+let isRecording = false, mediaRecorder = null, audioChunks = [];
+let progressTimer = null;
+let userAudioBlob = null;
+let modelAudio = null;
+let userAudioPlayer = null;
+
+// ── ランダム5問選出（各カテゴリから均等に） ──────────────────
+function buildQuestions() {
+  const cats = ["LR", "TH", "VB", "LINK"];
+  const result = [];
+  // 各カテゴリから1問は必ず
+  cats.forEach(cat => {
+    const pool = questionBank.filter(q => q.cat === cat);
+    result.push(pool[Math.floor(Math.random() * pool.length)]);
+  });
+  // 5問目はランダム
+  const last = questionBank[Math.floor(Math.random() * questionBank.length)];
+  result.push(last);
+  // シャッフル
+  return result.sort(() => Math.random() - 0.5);
+}
+
+// ── 初期化 ──────────────────────────────────────────────────
+function startChallenge() {
+  challengeQuestions = buildQuestions();
+  currentIndex = 0;
+  scores = [];
+  catScores = {};
+  pendingScore = null;
+  userAudioBlob = null;
+  if (modelAudio) { modelAudio.pause(); modelAudio = null; }
+
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('finalCard').style.display = 'none';
+  document.getElementById('nextBtn').style.display = 'none';
+  document.getElementById('restartBtn').style.display = 'none';
+  document.getElementById('retryBtn').style.display = 'none';
+  document.getElementById('topBar').style.display = 'block';
+  document.getElementById('questionCard').style.display = 'block';
+  document.getElementById('recBtn').style.display = 'flex';
+  document.getElementById('statusText').style.display = 'block';
+  document.getElementById('recBtn').disabled = false;
+  showQuestion();
+}
+
+function showQuestion() {
+  const q = challengeQuestions[currentIndex];
+  const cat = CAT_INFO[q.cat];
+
+  document.getElementById('categoryBadge').textContent = `${cat.icon} ${cat.label}`;
+  document.getElementById('categoryBadge').className = `category-badge ${cat.cls}`;
+  document.getElementById('phoneticHint').textContent = `💡 ${q.hint}`;
+  document.getElementById('questionEn').textContent = q.en;
+  document.getElementById('questionJa').textContent = q.ja;
+  document.getElementById('questionCounter').textContent = `${currentIndex + 1} / ${TOTAL}問`;
+  document.getElementById('challengeBar').style.width = `${(currentIndex / TOTAL) * 100}%`;
+
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('nextBtn').style.display = 'none';
+  document.getElementById('retryBtn').style.display = 'none';
+  document.getElementById('statusText').textContent = '🎤 ボタンを押して録音スタート';
+  document.getElementById('recBtn').disabled = false;
+  document.getElementById('playModelBtn').disabled = false;
+
+  userAudioBlob = null;
+  pendingScore = null;
+  if (modelAudio) { modelAudio.pause(); modelAudio = null; }
+}
+
+startChallenge();
+
+// ── お手本音声（TTS） ────────────────────────────────────────
+function playModelAudio() {
+  const q = challengeQuestions[currentIndex];
+  const utterance = new SpeechSynthesisUtterance(q.en);
+  utterance.lang = 'en-US';
+  utterance.rate = 0.9;
+  utterance.pitch = 1.0;
+
+  // 英語の音声を優先して選択
+  const voices = speechSynthesis.getVoices();
+  const enVoice = voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female'))
+                || voices.find(v => v.lang === 'en-US')
+                || voices.find(v => v.lang.startsWith('en'));
+  if (enVoice) utterance.voice = enVoice;
+
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utterance);
+}
+
+// ブラウザロード時に音声リストを取得
+if (typeof speechSynthesis !== 'undefined') {
+  speechSynthesis.getVoices();
+  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+}
+
+// ── ユーザー音声再生 ─────────────────────────────────────────
+function playUserAudio() {
+  if (!userAudioBlob) return;
+  if (userAudioPlayer) { userAudioPlayer.pause(); userAudioPlayer = null; }
+  userAudioPlayer = new Audio(URL.createObjectURL(userAudioBlob));
+  userAudioPlayer.play();
+}
+
+// ── 録音 ────────────────────────────────────────────────────
+async function toggleRecord() {
+  if (isRecording) {
+    mediaRecorder.stop();
+    isRecording = false;
+    document.getElementById('recBtn').classList.remove('recording');
+    document.getElementById('recBtn').textContent = '🎤';
+    document.getElementById('statusText').textContent = 'AI が分析中...';
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream, {
+      mimeType: 'audio/webm;codecs=opus',
+      audioBitsPerSecond: 16000,
+    });
+    audioChunks = [];
+    mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      if (!audioChunks.length) return;
+      const blob = new Blob(audioChunks, { type: 'audio/webm' });
+      userAudioBlob = blob;
+      const base64 = await new Promise(r => {
+        const rd = new FileReader();
+        rd.onload = () => r(rd.result.split(',')[1]);
+        rd.readAsDataURL(blob);
+      });
+      processAnswer(base64);
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    document.getElementById('recBtn').classList.add('recording');
+    document.getElementById('recBtn').textContent = '⏹';
+    document.getElementById('statusText').textContent = '録音中...（もう一度押すと停止）';
+
+    // 15秒で自動停止
+    setTimeout(() => {
+      if (isRecording) {
+        audioChunks = [];
+        mediaRecorder.stop();
+        isRecording = false;
+        document.getElementById('recBtn').classList.remove('recording');
+        document.getElementById('recBtn').textContent = '🎤';
+        document.getElementById('statusText').textContent = '録音が長すぎます。もう一度お試しください。';
+      }
+    }, 15000);
+  } catch(e) { alert('マイクを許可してください'); }
+}
+
+// ── API 処理 ─────────────────────────────────────────────────
+async function processAnswer(base64) {
+  const q = challengeQuestions[currentIndex];
+  const cat = CAT_INFO[q.cat];
+  showProgress();
+  document.getElementById('recBtn').disabled = true;
+
+  const prompt = `あなたはプロの英語発音コーチです。
+生徒に以下の英文を発音させました。
+お手本の文: "${q.en}"
+発音カテゴリ: ${cat.label}（${q.hint}）
+
+生徒の音声を聞いて、以下のJSONのみで回答してください（コードブロック不要）:
+{
+  "transcript": "聞き取った生徒の英語",
+  "accent_score": 0-100の整数,
+  "rhythm_score": 0-100の整数,
+  "intonation_score": 0-100の整数,
+  "total_score": 3つの平均（整数）,
+  "feedback": "まず褒める一言（日本語）。次に「⚠️ 注意点：」という見出しの後に、${cat.label}に特有の発音上の問題点を具体的に日本語で説明してください。最後に励ましの一言を添えてください。"
+}`;
+
+  try {
+    const res = await fetch('/api/correct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64Audio: base64, prompt })
+    });
+    const data = await res.json();
+
+    if (!data.candidates || !data.candidates[0]) {
+      throw new Error('AIの応答がありませんでした。もう一度お試しください。');
+    }
+
+    const rawText = data.candidates[0].content.parts[0].text;
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AIの返答を解析できませんでした。');
+    const result = JSON.parse(jsonMatch[0]);
+
+    const total = Number(result.total_score) || Math.round((Number(result.accent_score) + Number(result.rhythm_score) + Number(result.intonation_score)) / 3);
+    pendingScore = total;
+
+    completeProgress();
+
+    // 累計計算
+    const tentative = [...scores, total];
+    const goodCount = tentative.filter(s => s >= 80).length;
+    const avg = Math.round(tentative.reduce((a, b) => a + b, 0) / tentative.length);
+
+    // スコアに応じたタイトル
+    let scoreTitle = total >= 90 ? '素晴らしい！🌟' : total >= 75 ? 'よくできました！✨' : total >= 60 ? 'いい調子！💪' : 'もう一息！頑張れ！🌱';
+
+    document.getElementById('resultCard').style.display = 'block';
+    document.getElementById('scoreBig').textContent = total;
+    document.getElementById('scoreTitle').textContent = scoreTitle;
+    document.getElementById('accentScore').textContent = result.accent_score;
+    document.getElementById('rhythmScore').textContent = result.rhythm_score;
+    document.getElementById('intonScore').textContent = result.intonation_score;
+    document.getElementById('transcriptText').textContent = result.transcript || '（聞き取れませんでした）';
+
+    // フィードバックの「注意点：」以降を色付き表示
+    const feedbackEl = document.getElementById('feedbackText');
+    const raw = result.feedback || '';
+    const warningIdx = raw.indexOf('⚠️ 注意点：');
+    if (warningIdx !== -1) {
+      const before = raw.slice(0, warningIdx);
+      const after = raw.slice(warningIdx);
+      // 注意点の終わりを最後の文で区切る
+      const lastPeriod = after.lastIndexOf('。');
+      const warning = lastPeriod > 0 ? after.slice(0, lastPeriod + 1) : after;
+      const encouragement = lastPeriod > 0 ? after.slice(lastPeriod + 1) : '';
+      feedbackEl.innerHTML = `${escHtml(before)}<span class="highlight">${escHtml(warning)}</span>${escHtml(encouragement)}`;
+    } else {
+      feedbackEl.textContent = raw;
+    }
+
+    document.getElementById('goodCount').textContent = `${goodCount} / ${tentative.length}`;
+    document.getElementById('avgScore').textContent = avg;
+    document.getElementById('statusText').textContent = '添削完了！';
+
+    // ユーザー音声再生ボタンを有効化
+    document.getElementById('playUserBtn').disabled = false;
+
+    document.getElementById('nextBtn').style.display = 'block';
+    document.getElementById('nextBtn').textContent =
+      currentIndex + 1 >= TOTAL ? '結果を見る 🏆' : `次の問題へ ➔ (${currentIndex + 2} / ${TOTAL})`;
+    document.getElementById('retryBtn').style.display = 'block';
+    document.getElementById('recBtn').disabled = false;
+
+  } catch (e) {
+    completeProgress();
+    document.getElementById('statusText').innerHTML = `<span style="color:#ef4444">エラー: ${e.message}</span>`;
+    document.getElementById('recBtn').disabled = false;
+  }
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── ナビゲーション ───────────────────────────────────────────
+function nextQuestion() {
+  if (pendingScore !== null) {
+    const q = challengeQuestions[currentIndex];
+    scores.push(pendingScore);
+    if (!catScores[q.cat]) catScores[q.cat] = { total: 0, count: 0 };
+    catScores[q.cat].total += pendingScore;
+    catScores[q.cat].count++;
+    pendingScore = null;
+  }
+  currentIndex++;
+  if (currentIndex >= TOTAL) showFinalResult();
+  else showQuestion();
+}
+
+function retryQuestion() {
+  pendingScore = null;
+  userAudioBlob = null;
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('nextBtn').style.display = 'none';
+  document.getElementById('retryBtn').style.display = 'none';
+  document.getElementById('playUserBtn').disabled = true;
+  document.getElementById('statusText').textContent = '🎤 ボタンを押して録音スタート';
+  document.getElementById('recBtn').disabled = false;
+}
+
+function showFinalResult() {
+  document.getElementById('questionCard').style.display = 'none';
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('nextBtn').style.display = 'none';
+  document.getElementById('topBar').style.display = 'none';
+  document.getElementById('recBtn').style.display = 'none';
+  document.getElementById('statusText').style.display = 'none';
+
+  const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  const good = scores.filter(s => s >= 80).length;
+  const best = Math.max(...scores);
+
+  document.getElementById('finalScoreBig').textContent = avg;
+  document.getElementById('finalGood').textContent = `${good} / ${TOTAL}`;
+  document.getElementById('finalBest').textContent = best;
+
+  const breakdown = document.getElementById('catBreakdown');
+  breakdown.innerHTML = '<div style="font-size:12px;font-weight:800;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">カテゴリ別スコア</div>';
+  Object.entries(catScores).forEach(([cat, data]) => {
+    const info = CAT_INFO[cat];
+    const pavg = Math.round(data.total / data.count);
+    const row = document.createElement('div');
+    row.className = 'cat-row';
+    row.innerHTML = `<span class="cat-row-name">${info.icon} ${info.label}</span><span class="cat-row-score">${pavg}点（${data.count}問）</span>`;
+    breakdown.appendChild(row);
+  });
+
+  const msg = avg >= 90 ? '発音マスター！完璧に近いです 🏆' :
+              avg >= 75 ? 'とても上手！着実に上達しています ✨' :
+              avg >= 60 ? 'いい調子！練習を続ければもっと伸びる 💪' :
+                          '基礎から丁寧に練習しましょう！応援しています 🌱';
+  document.getElementById('finalMsg').textContent = msg;
+  document.getElementById('finalCard').style.display = 'block';
+  document.getElementById('restartBtn').style.display = 'block';
+}
+
+function restartChallenge() { startChallenge(); }
+
+// ── プログレス ───────────────────────────────────────────────
+const STEPS = [
+  { pct: 15, label: '音声を受信中...' },
+  { pct: 35, label: '音声を文字に変換中...' },
+  { pct: 60, label: '発音を分析中...' },
+  { pct: 80, label: 'フィードバックを生成中...' },
+  { pct: 92, label: 'もうすぐ完了...' },
+];
+
+function showProgress() {
+  document.getElementById('progressWrap').classList.add('show');
+  let i = 0;
+  progressTimer = setInterval(() => {
+    if (i >= STEPS.length) { clearInterval(progressTimer); return; }
+    setProgress(STEPS[i].pct, STEPS[i].label);
+    i++;
+  }, 900);
+}
+
+function completeProgress() {
+  clearInterval(progressTimer);
+  setProgress(100, '完了！');
+  setTimeout(() => {
+    document.getElementById('progressWrap').classList.remove('show');
+    setProgress(0, '');
+  }, 600);
+}
+
+function setProgress(pct, label) {
+  document.getElementById('analysisBar').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = pct + '%';
+  document.getElementById('progressStep').textContent = label;
+}
+</script>
+</body>
+</html>
