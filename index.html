@@ -448,7 +448,7 @@ let currentIndex = 0;
 let scores = [];
 let catScores = {};
 let pendingScore = null;
-let isRecording = false, mediaRecorder = null, audioChunks = [];
+let isRecording = false, isCancelled = false, mediaRecorder = null, audioChunks = [];
 let progressTimer = null;
 let userAudioBlob = null;
 let modelAudio = null;
@@ -598,7 +598,7 @@ async function toggleRecord() {
     audioChunks = [];
     mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) audioChunks.push(e.data); };
     mediaRecorder.onstop = async () => {
-      if (!audioChunks.length) return;
+      if (isCancelled || !audioChunks.length) { isCancelled = false; return; }
       const blob = new Blob(audioChunks, { type: 'audio/webm' });
       userAudioBlob = blob;
       const base64 = await new Promise(r => {
@@ -614,9 +614,10 @@ async function toggleRecord() {
     document.getElementById('recBtn').textContent = '⏹';
     document.getElementById('statusText').textContent = '録音中...（もう一度押すと停止）';
 
-    // 15秒で自動停止
+    // 15秒で自動停止（分析はしない）
     setTimeout(() => {
       if (isRecording) {
+        isCancelled = true;   // 分析をスキップするフラグ
         audioChunks = [];
         mediaRecorder.stop();
         isRecording = false;
