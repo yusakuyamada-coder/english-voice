@@ -512,6 +512,13 @@ function showQuestion() {
   document.getElementById('recBtn').disabled = false;
   document.getElementById('playModelBtn').disabled = false;
 
+  // フィードバックブロックをリセット
+  ['fbPraise','fbWarning','fbHint'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  document.getElementById('transcriptText').innerHTML = '';
+
   userAudioBlob = null;
   pendingScore = null;
   if (modelAudio) { modelAudio.pause(); modelAudio = null; }
