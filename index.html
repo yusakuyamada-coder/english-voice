@@ -785,8 +785,11 @@ Azureの機械評価結果（参考）：
     // AzureとGeminiの問題単語をマージ
     const allWords = azureData.allWords || [];
     const geminiBadWordNames = feedback.gemini_bad_words || [];
-    // Geminiが指摘した単語をallWordsに反映（スコアが高くても問題単語として扱う）
+    // 省略（Omission）は0点、余分（Insertion）は50点に強制修正
+    // Geminiが指摘した単語も65点以下に下げる
     const mergedAllWords = allWords.map(w => {
+      if (w.errorType === 'Omission')   return { ...w, accuracy: 0 };
+      if (w.errorType === 'Insertion')  return { ...w, accuracy: 50 };
       const isGeminiBad = geminiBadWordNames.some(g => g.toLowerCase() === w.word.toLowerCase());
       return isGeminiBad && w.accuracy > 70
         ? { ...w, accuracy: Math.min(w.accuracy, 65), errorType: 'Mispronunciation' }
