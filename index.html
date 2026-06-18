@@ -785,11 +785,25 @@ Azureの機械評価結果（参考）：
     // AzureとGeminiの問題単語をマージ
     const allWords = azureData.allWords || [];
     const geminiBadWordNames = feedback.gemini_bad_words || [];
-    // 省略（Omission）は0点、余分（Insertion）は50点に強制修正
-    // Geminiが指摘した単語も65点以下に下げる
-    const mergedAllWords = allWords.map(w => {
-      if (w.errorType === 'Omission')   return { ...w, accuracy: 0 };
-      if (w.errorType === 'Insertion')  return { ...w, accuracy: 50 };
+
+    // 同じ単語が重複している場合は最初の1つだけ残す（Insertionの重複除去）
+    const seenWords = {};
+    const deduped = allWords.filter(w => {
+      const key = w.word.toLowerCase();
+      if (seenWords[key]) return false;
+      seenWords[key] = true;
+      return true;
+    });
+
+    // 省略・余分・ミスの補正
+    const transcriptWords = (azureData.transcript || '').toLowerCase().split(/\s+/);
+    const mergedAllWords = deduped.map(w => {
+      const inTranscript = transcriptWords.includes(w.word.toLowerCase());
+      // 省略：聞き取りテキストに実際にない場合だけ0点。テキストにあれば誤判定なので無視
+      if (w.errorType === 'Omission' && !inTranscript) return { ...w, accuracy: 0 };
+      if (w.errorType === 'Omission' &&  inTranscript) return { ...w, errorType: 'None' };
+      // 余分：Insertionも同様に誤判定が多いので表示だけして減点は軽め
+      if (w.errorType === 'Insertion') return { ...w, accuracy: Math.min(w.accuracy, 70) };
       const isGeminiBad = geminiBadWordNames.some(g => g.toLowerCase() === w.word.toLowerCase());
       return isGeminiBad && w.accuracy > 70
         ? { ...w, accuracy: Math.min(w.accuracy, 65), errorType: 'Mispronunciation' }
