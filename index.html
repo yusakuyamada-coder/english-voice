@@ -279,6 +279,44 @@
       margin-top: 16px; text-align: center;
     }
 
+    /* ── 単語スコアバー ── */
+    .word-scores { margin-bottom: 12px; }
+    .word-score-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 7px;
+    }
+    .word-score-label {
+      font-size: 13px; font-weight: 800; color: var(--text);
+      width: 110px; flex-shrink: 0; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+    }
+    .word-score-bar-wrap {
+      flex: 1; background: #F3F4F6; border-radius: 99px;
+      height: 10px; overflow: hidden;
+    }
+    .word-score-bar {
+      height: 100%; border-radius: 99px;
+      transition: width 0.6s ease;
+    }
+    .bar-good   { background: linear-gradient(90deg, var(--mint), #10B981); }
+    .bar-ok     { background: linear-gradient(90deg, var(--yellow), #F59E0B); }
+    .bar-bad    { background: linear-gradient(90deg, var(--pink), #EF4444); }
+    .word-score-num {
+      font-size: 12px; font-weight: 800; width: 34px;
+      text-align: right; flex-shrink: 0;
+    }
+    .num-good { color: #059669; }
+    .num-ok   { color: #D97706; }
+    .num-bad  { color: var(--pink); }
+    /* 音素バッジ */
+    .phoneme-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+    .phoneme-badge {
+      font-size: 11px; font-weight: 800; padding: 3px 8px;
+      border-radius: 99px; display: flex; align-items: center; gap: 3px;
+    }
+    .phoneme-badge.bad  { background: #FFE8ED; color: var(--pink); border: 1.5px solid var(--pink); }
+    .phoneme-badge.good { background: var(--mint-light); color: #059669; border: 1.5px solid var(--mint); }
+
     @keyframes pulse { 0%{transform:scale(1)} 50%{transform:scale(1.08)} 100%{transform:scale(1)} }
     @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
     .fade-up { animation: fadeUp 0.35s ease; }
@@ -344,6 +382,14 @@
     </div>
 
 
+
+    <!-- 単語スコアバー -->
+    <div class="feedback-section" id="wordScoreSection" style="display:none">
+      <div class="feedback-label">📊 単語別スコア</div>
+      <div class="word-scores" id="wordScores"></div>
+      <div class="feedback-label" style="margin-top:8px;">🔤 問題の音素</div>
+      <div class="phoneme-badges" id="phonemeBadges"></div>
+    </div>
 
     <!-- 聞き取り -->
     <div class="feedback-section">
@@ -513,11 +559,13 @@ function showQuestion() {
   document.getElementById('playModelBtn').disabled = false;
 
   // フィードバックブロックをリセット
-  ['fbPraise','fbWarning','fbHint'].forEach(id => {
+  ['fbPraise','fbWarning','fbHint','wordScoreSection'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
   document.getElementById('transcriptText').innerHTML = '';
+  document.getElementById('wordScores').innerHTML = '';
+  document.getElementById('phonemeBadges').innerHTML = '';
 
   userAudioBlob = null;
   pendingScore = null;
@@ -715,13 +763,51 @@ Azure音声評価の結果：総合${azureData.pronScore}点、精度${azureData
     document.getElementById('scoreBig').textContent = total;
     document.getElementById('scoreTitle').textContent = scoreTitle;
 
-    // 聞き取り結果＋問題単語ハイライト
+    // 単語スコアバー
+    const allWords = azureData.allWords || [];
     const badWords = azureData.badWords || [];
+    if (allWords.length > 0) {
+      document.getElementById('wordScoreSection').style.display = 'block';
+      const wordScoresEl = document.getElementById('wordScores');
+      wordScoresEl.innerHTML = '';
+      allWords.forEach(w => {
+        const sc = w.accuracy;
+        const barClass = sc >= 80 ? 'bar-good' : sc >= 60 ? 'bar-ok' : 'bar-bad';
+        const numClass = sc >= 80 ? 'num-good' : sc >= 60 ? 'num-ok'  : 'num-bad';
+        const errBadge = w.errorType !== 'None'
+          ? `<span style="font-size:10px;color:var(--pink);font-weight:800;margin-left:4px;">${w.errorType === 'Mispronunciation' ? '❌ミス' : w.errorType === 'Omission' ? '⚠️省略' : '➕余分'}</span>` : '';
+        wordScoresEl.innerHTML += `
+          <div class="word-score-row">
+            <div class="word-score-label">${escHtml(w.word)}${errBadge}</div>
+            <div class="word-score-bar-wrap">
+              <div class="word-score-bar ${barClass}" style="width:${sc}%"></div>
+            </div>
+            <div class="word-score-num ${numClass}">${sc}</div>
+          </div>`;
+      });
+
+      // 問題音素バッジ
+      const phonemeBadgesEl = document.getElementById('phonemeBadges');
+      phonemeBadgesEl.innerHTML = '';
+      let hasBadPhoneme = false;
+      badWords.forEach(w => {
+        (w.phonemes || []).forEach(p => {
+          hasBadPhoneme = true;
+          const cls = p.score < 50 ? 'bad' : 'bad';
+          phonemeBadgesEl.innerHTML += `<span class="phoneme-badge ${cls}">/${p.phoneme}/ ${p.score}点（${escHtml(w.word)}）</span>`;
+        });
+      });
+      if (!hasBadPhoneme) {
+        phonemeBadgesEl.innerHTML = '<span class="phoneme-badge good">✅ 問題のある音素なし</span>';
+      }
+    }
+
+    // 聞き取り結果＋問題単語ハイライト
     let transcriptHtml = escHtml(azureData.transcript || '（聞き取れませんでした）');
     badWords.forEach(w => {
       const escaped = escHtml(w.word);
       transcriptHtml = transcriptHtml.replace(
-        new RegExp('\\b' + escaped + '\\b', 'gi'),
+        new RegExp('\b' + escaped + '\b', 'gi'),
         `<span class="word-bad">${escaped}</span>`
       );
     });
