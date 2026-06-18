@@ -169,7 +169,7 @@
     .score-item-label { font-size: 10px; font-weight: 700; color: var(--gray); }
 
     /* ── フィードバック ── */
-    .feedback-section { margin-bottom: 4px; }
+    .feedback-section { margin-bottom: 10px; }
     .feedback-label {
       font-size: 10px; font-weight: 800; text-transform: uppercase;
       letter-spacing: 0.06em; color: var(--gray); margin-bottom: 6px;
@@ -179,14 +179,19 @@
       padding: 10px 12px; font-size: 14px; font-weight: 600;
       color: var(--text); line-height: 1.6; margin-bottom: 10px;
     }
-    .feedback-text {
-      background: #F3F4F6; border-radius: 10px;
-      padding: 12px 14px; font-size: 13px;
-      line-height: 1.8; color: #374151;
-    }
-    /* 注意点のハイライト */
-    .feedback-text .highlight  { color: var(--pink);   font-weight: 800; }
-    .feedback-text .hint-text  { color: var(--purple); font-weight: 800; }
+    /* フィードバック3ブロック */
+    .fb-block { border-radius: 12px; padding: 11px 13px; font-size: 13px; line-height: 1.8; margin-bottom: 8px; }
+    .fb-block:last-child { margin-bottom: 0; }
+    .fb-praise  { background: #D1FAE5; color: #065F46; }
+    .fb-warning { background: #FFE8ED; color: #9F1239; }
+    .fb-hint    { background: #EDE9FE; color: #4C1D95; }
+    .fb-block-title { font-size: 11px; font-weight: 900; margin-bottom: 4px; letter-spacing: 0.04em; }
+    .fb-praise  .fb-block-title { color: #059669; }
+    .fb-warning .fb-block-title { color: var(--pink); }
+    .fb-hint    .fb-block-title { color: var(--purple); }
+    /* 問題単語ハイライト */
+    .word-bad  { background: var(--pink); color: white; border-radius: 4px; padding: 1px 5px; font-weight: 800; font-size: 12px; }
+    .word-good { background: var(--mint); color: white; border-radius: 4px; padding: 1px 5px; font-weight: 800; font-size: 12px; }
 
     .running-scores {
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;
@@ -367,7 +372,9 @@
     <!-- フィードバック -->
     <div class="feedback-section">
       <div class="feedback-label">🌸 フィードバック</div>
-      <div class="feedback-text" id="feedbackText"></div>
+      <div id="fbPraise"  class="fb-block fb-praise"  style="display:none"><div class="fb-block-title">✅ 良かった点</div><div id="fbPraiseText"></div></div>
+      <div id="fbWarning" class="fb-block fb-warning" style="display:none"><div class="fb-block-title">⚠️ 注意点</div><div id="fbWarningText"></div></div>
+      <div id="fbHint"    class="fb-block fb-hint"    style="display:none"><div class="fb-block-title">💡 改善ヒント</div><div id="fbHintText"></div></div>
     </div>
 
     <!-- 累計スコア -->
@@ -655,8 +662,8 @@ async function processAnswer(base64) {
 - intonation_score: 文全体の抑揚が自然か。単調なら減点
 - 完璧に近い発音でも95点止まり。80点以上はかなり上手な場合のみ
 
-以下のJSON形式のみで回答してください:
-{"transcript":"聞き取った英語","accent_score":点数,"rhythm_score":点数,"intonation_score":点数,"total_score":3つの平均点,"feedback":"①良かった点を一言。②⚠️ 注意点：問題のあった単語を具体的に挙げ（例:「reallyのRが曖昧」）、口の形や舌の位置まで日本語で詳しく説明。③💡 改善ヒント：次回意識するポイントを一言。"}`;
+以下のJSON形式のみで回答してください（コードブロック不要）:
+{"transcript":"聞き取った英語","accent_score":点数,"rhythm_score":点数,"intonation_score":点数,"total_score":3つの平均点,"bad_words":["発音が悪かった単語1","単語2"],"praise":"良かった点を1〜2文で日本語で","warning":"問題のあった単語を具体的に挙げ（例:「reallyのRが曖昧で舌が丸まっていない」）口の形・舌の位置まで日本語で詳しく説明","hint":"次回意識する具体的なポイントを1〜2文で日本語で"}`;
 
   try {
     const res = await fetch('/api/correct', {
@@ -702,25 +709,46 @@ async function processAnswer(base64) {
     document.getElementById('intonScore').textContent = result.intonation_score;
     document.getElementById('transcriptText').textContent = result.transcript || '（聞き取れませんでした）';
 
-    // フィードバック：①褒め → ②⚠️注意点（ピンク） → ③💡ヒント（パープル）を色分け
-    const feedbackEl = document.getElementById('feedbackText');
-    const raw = result.feedback || '';
-    const warningIdx = raw.indexOf('⚠️ 注意点：');
-    const hintIdx    = raw.indexOf('💡 改善ヒント：');
+    // フィードバック3ブロック表示
+    const badWords = result.bad_words || [];
 
-    if (warningIdx !== -1 && hintIdx !== -1) {
-      const part1 = raw.slice(0, warningIdx);
-      const part2 = raw.slice(warningIdx, hintIdx);
-      const part3 = raw.slice(hintIdx);
-      feedbackEl.innerHTML =
-        `${escHtml(part1)}<span class="highlight">${escHtml(part2)}</span><span class="hint-text">${escHtml(part3)}</span>`;
-    } else if (warningIdx !== -1) {
-      const part1 = raw.slice(0, warningIdx);
-      const part2 = raw.slice(warningIdx);
-      feedbackEl.innerHTML = `${escHtml(part1)}<span class="highlight">${escHtml(part2)}</span>`;
-    } else {
-      feedbackEl.textContent = raw;
+    // 褒め
+    if (result.praise) {
+      document.getElementById('fbPraise').style.display = 'block';
+      document.getElementById('fbPraiseText').textContent = result.praise;
     }
+
+    // 注意点（問題単語をハイライト）
+    if (result.warning) {
+      document.getElementById('fbWarning').style.display = 'block';
+      let warningHtml = escHtml(result.warning);
+      badWords.forEach(word => {
+        const escaped = escHtml(word);
+        warningHtml = warningHtml.replace(
+          new RegExp(escaped, 'g'),
+          `<span class="word-bad">${escaped}</span>`
+        );
+      });
+      document.getElementById('fbWarningText').innerHTML = warningHtml;
+    }
+
+    // ヒント
+    if (result.hint) {
+      document.getElementById('fbHint').style.display = 'block';
+      document.getElementById('fbHintText').textContent = result.hint;
+    }
+
+    // 聞き取り結果の問題単語もハイライト
+    const transcript = result.transcript || '（聞き取れませんでした）';
+    let transcriptHtml = escHtml(transcript);
+    badWords.forEach(word => {
+      const escaped = escHtml(word);
+      transcriptHtml = transcriptHtml.replace(
+        new RegExp(escaped, 'gi'),
+        `<span class="word-bad">${escaped}</span>`
+      );
+    });
+    document.getElementById('transcriptText').innerHTML = transcriptHtml;
 
     document.getElementById('goodCount').textContent = `${goodCount} / ${tentative.length}`;
     document.getElementById('avgScore').textContent = avg;
@@ -770,6 +798,8 @@ function retryQuestion() {
   document.getElementById('playUserBtn').disabled = true;
   document.getElementById('statusText').textContent = '🎤 ボタンを押して録音スタート';
   document.getElementById('recBtn').disabled = false;
+  // フィードバックブロックをリセット
+  ['fbPraise','fbWarning','fbHint'].forEach(id => document.getElementById(id).style.display = 'none');
 }
 
 function showFinalResult() {
