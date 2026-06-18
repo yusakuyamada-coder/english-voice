@@ -613,12 +613,29 @@ async function toggleRecord() {
       if (isCancelled || !audioChunks.length) { isCancelled = false; return; }
       const blob = new Blob(audioChunks, { type: recordingMimeType });
       userAudioBlob = blob;
-      const base64 = await new Promise(r => {
-        const rd = new FileReader();
-        rd.onload = () => r(rd.result.split(',')[1]);
-        rd.readAsDataURL(blob);
-      });
-      processAnswer(base64, recordingMimeType);
+
+      try {
+        // WebM/opusをPCM(WAV)に変換してAzureに送る
+        const arrayBuf = await blob.arrayBuffer();
+        const audioCtx = new AudioContext({ sampleRate: 16000 });
+        const decoded = await audioCtx.decodeAudioData(arrayBuf);
+        await audioCtx.close();
+
+        // モノラルPCMデータを取得
+        const pcmData = decoded.getChannelData(0);
+        const wavBuffer = pcmToWav(pcmData, 16000);
+        const base64 = arrayBufferToBase64(wavBuffer);
+        processAnswer(base64, 'audio/wav');
+      } catch(e) {
+        console.error('PCM変換エラー:', e);
+        // フォールバック：元のblob
+        const base64 = await new Promise(r => {
+          const rd = new FileReader();
+          rd.onload = () => r(rd.result.split(',')[1]);
+          rd.readAsDataURL(blob);
+        });
+        processAnswer(base64, recordingMimeType);
+      }
     };
     mediaRecorder.start();
     isRecording = true;
@@ -747,6 +764,39 @@ Azure音声評価の結果：総合${azureData.pronScore}点、精度${azureData
     document.getElementById('statusText').innerHTML = `<span style="color:#ef4444">エラー: ${e.message}</span>`;
     document.getElementById('recBtn').disabled = false;
   }
+}
+
+// PCM Float32Array → WAV ArrayBuffer
+function pcmToWav(pcmData, sampleRate) {
+  const numSamples = pcmData.length;
+  const buffer = new ArrayBuffer(44 + numSamples * 2);
+  const view = new DataView(buffer);
+  const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+  writeStr(0, 'RIFF');
+  view.setUint32(4,  36 + numSamples * 2, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1,  true); // PCM
+  view.setUint16(22, 1,  true); // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2,  true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, numSamples * 2, true);
+  for (let i = 0; i < numSamples; i++) {
+    const s = Math.max(-1, Math.min(1, pcmData[i]));
+    view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  return buffer;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
 }
 
 function escHtml(str) {
