@@ -24,7 +24,6 @@ export default async function handler(req, res) {
     };
     const assessmentConfigBase64 = Buffer.from(JSON.stringify(assessmentConfig)).toString('base64');
 
-    // Content-Typeをフロントから受け取ったmimeTypeに合わせる
     const contentType = (mimeType && mimeType.includes('wav')) ? 'audio/wav'
                       : (mimeType && mimeType.includes('pcm')) ? 'audio/webm;codecs=pcm'
                       : 'audio/webm;codecs=opus';
@@ -49,43 +48,46 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
-    console.log('Azure response:', JSON.stringify(data));
 
-    // RecognitionStatusチェック
     if (data.RecognitionStatus !== 'Success') {
       return res.status(500).json({ error: `Recognition failed: ${data.RecognitionStatus}`, raw: data });
     }
 
-    const pa = data?.NBest?.[0]?.PronunciationAssessment;
-    const words = data?.NBest?.[0]?.Words || [];
+    const best  = data?.NBest?.[0];
+    const pa    = best;   // AccuracyScore等はNBest直下にある
+    const words = best?.Words || [];
 
-    if (!pa) {
+    if (!pa || pa.PronScore === undefined) {
       return res.status(500).json({ error: 'No pronunciation assessment result', raw: data });
     }
 
+    // 問題のある単語（AccuracyScore < 70 または ErrorType が None 以外）
     const badWords = words
-      .filter(w => (w.PronunciationAssessment?.AccuracyScore || 100) < 70
-                || (w.PronunciationAssessment?.ErrorType && w.PronunciationAssessment.ErrorType !== 'None'))
+      .filter(w => (w.AccuracyScore || 100) < 70 || (w.ErrorType && w.ErrorType !== 'None'))
       .map(w => ({
-        word: w.Word,
-        accuracy: Math.round(w.PronunciationAssessment?.AccuracyScore || 0),
-        errorType: w.PronunciationAssessment?.ErrorType,
-        phonemes: (w.Phonemes || []).filter(p => (p.PronunciationAssessment?.AccuracyScore || 100) < 70)
-          .map(p => ({ phoneme: p.Phoneme, score: Math.round(p.PronunciationAssessment?.AccuracyScore || 0) })),
+        word:      w.Word,
+        accuracy:  Math.round(w.AccuracyScore || 0),
+        errorType: w.ErrorType || 'None',
+        phonemes:  (w.Phonemes || [])
+          .filter(p => (p.PronunciationAssessment?.AccuracyScore || p.AccuracyScore || 100) < 70)
+          .map(p => ({
+            phoneme: p.Phoneme,
+            score:   Math.round(p.PronunciationAssessment?.AccuracyScore || p.AccuracyScore || 0),
+          })),
       }));
 
     res.status(200).json({
-      transcript:         data?.NBest?.[0]?.Display || '',
-      accuracyScore:      Math.round(pa.AccuracyScore     || 0),
-      fluencyScore:       Math.round(pa.FluencyScore      || 0),
-      completenessScore:  Math.round(pa.CompletenessScore || 0),
-      pronScore:          Math.round(pa.PronScore         || 0),
-      prosodyScore:       Math.round(pa.ProsodyScore      || 0),
+      transcript:          best?.Display || '',
+      accuracyScore:       Math.round(pa.AccuracyScore      || 0),
+      fluencyScore:        Math.round(pa.FluencyScore       || 0),
+      completenessScore:   Math.round(pa.CompletenessScore  || 0),
+      pronScore:           Math.round(pa.PronScore          || 0),
+      prosodyScore:        Math.round(pa.ProsodyScore       || 0),
       badWords,
       allWords: words.map(w => ({
         word:      w.Word,
-        accuracy:  Math.round(w.PronunciationAssessment?.AccuracyScore || 100),
-        errorType: w.PronunciationAssessment?.ErrorType || 'None',
+        accuracy:  Math.round(w.AccuracyScore || 100),
+        errorType: w.ErrorType || 'None',
       })),
     });
 
