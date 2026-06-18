@@ -448,7 +448,7 @@ let currentIndex = 0;
 let scores = [];
 let catScores = {};
 let pendingScore = null;
-let isRecording = false, isCancelled = false, mediaRecorder = null, audioChunks = [];
+let isRecording = false, isCancelled = false, mediaRecorder = null, audioChunks = [], recordingMimeType = "";
 let progressTimer = null;
 let userAudioBlob = null;
 let modelAudio = null;
@@ -598,22 +598,27 @@ async function toggleRecord() {
   }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // サポートされる形式を選択（AzureはWAV/PCMが最も安定）
+    const mimeType = MediaRecorder.isTypeSupported('audio/wav') ? 'audio/wav'
+                   : MediaRecorder.isTypeSupported('audio/webm;codecs=pcm') ? 'audio/webm;codecs=pcm'
+                   : 'audio/webm;codecs=opus';
+    recordingMimeType = mimeType;
     mediaRecorder = new MediaRecorder(stream, {
-      mimeType: 'audio/webm;codecs=opus',
+      mimeType,
       audioBitsPerSecond: 16000,
     });
     audioChunks = [];
     mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) audioChunks.push(e.data); };
     mediaRecorder.onstop = async () => {
       if (isCancelled || !audioChunks.length) { isCancelled = false; return; }
-      const blob = new Blob(audioChunks, { type: 'audio/webm' });
+      const blob = new Blob(audioChunks, { type: recordingMimeType });
       userAudioBlob = blob;
       const base64 = await new Promise(r => {
         const rd = new FileReader();
         rd.onload = () => r(rd.result.split(',')[1]);
         rd.readAsDataURL(blob);
       });
-      processAnswer(base64);
+      processAnswer(base64, recordingMimeType);
     };
     mediaRecorder.start();
     isRecording = true;
@@ -637,7 +642,7 @@ async function toggleRecord() {
 }
 
 // ── API 処理 ─────────────────────────────────────────────────
-async function processAnswer(base64) {
+async function processAnswer(base64, mimeType) {
   const q = challengeQuestions[currentIndex];
   const cat = CAT_INFO[q.cat];
   showProgress();
@@ -648,7 +653,7 @@ async function processAnswer(base64) {
     const azureRes = await fetch('/api/pronunciation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ base64Audio: base64, referenceText: q.en })
+      body: JSON.stringify({ base64Audio: base64, referenceText: q.en, mimeType: mimeType })
     });
     const azureData = await azureRes.json();
     console.log('Azure result:', azureData);
