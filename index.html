@@ -685,11 +685,15 @@ async function toggleRecord() {
         processAnswer(base64, recordingMimeType);
       }
     };
-    mediaRecorder.start();
-    isRecording = true;
+    // 0.3秒後に録音開始（Azureが最初の音を取りこぼさないように）
     document.getElementById('recBtn').classList.add('recording');
     document.getElementById('recBtn').textContent = '⏹';
-    document.getElementById('statusText').textContent = '録音中...（もう一度押すと停止）';
+    document.getElementById('statusText').textContent = '準備中...';
+    setTimeout(() => {
+      mediaRecorder.start();
+      isRecording = true;
+      document.getElementById('statusText').textContent = '録音中...（もう一度押すと停止）';
+    }, 300);
 
     // 15秒で自動停止（分析はしない）
     setTimeout(() => {
@@ -901,14 +905,15 @@ Azureの機械評価結果（参考）：
   }
 }
 
-// PCM Float32Array → WAV ArrayBuffer
+// PCM Float32Array → WAV ArrayBuffer（前後に無音を追加）
 function pcmToWav(pcmData, sampleRate) {
-  const numSamples = pcmData.length;
-  const buffer = new ArrayBuffer(44 + numSamples * 2);
+  const silenceSamples = Math.floor(sampleRate * 0.3); // 前後0.3秒の無音
+  const totalSamples = silenceSamples + pcmData.length + silenceSamples;
+  const buffer = new ArrayBuffer(44 + totalSamples * 2);
   const view = new DataView(buffer);
   const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
   writeStr(0, 'RIFF');
-  view.setUint32(4,  36 + numSamples * 2, true);
+  view.setUint32(4,  36 + totalSamples * 2, true);
   writeStr(8, 'WAVE');
   writeStr(12, 'fmt ');
   view.setUint32(16, 16, true);
@@ -919,10 +924,19 @@ function pcmToWav(pcmData, sampleRate) {
   view.setUint16(32, 2,  true);
   view.setUint16(34, 16, true);
   writeStr(36, 'data');
-  view.setUint32(40, numSamples * 2, true);
-  for (let i = 0; i < numSamples; i++) {
+  view.setUint32(40, totalSamples * 2, true);
+  // 先頭の無音
+  for (let i = 0; i < silenceSamples; i++) {
+    view.setInt16(44 + i * 2, 0, true);
+  }
+  // 音声データ
+  for (let i = 0; i < pcmData.length; i++) {
     const s = Math.max(-1, Math.min(1, pcmData[i]));
-    view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    view.setInt16(44 + (silenceSamples + i) * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  // 末尾の無音
+  for (let i = 0; i < silenceSamples; i++) {
+    view.setInt16(44 + (silenceSamples + pcmData.length + i) * 2, 0, true);
   }
   return buffer;
 }
