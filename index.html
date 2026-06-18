@@ -162,11 +162,7 @@
     .model-box .mini-play-btn { background: var(--purple); color: white; box-shadow: 0 3px 8px rgba(167,139,250,0.4); }
     .user-box  .mini-play-btn  { background: var(--pink);   color: white; box-shadow: 0 3px 8px rgba(255,107,138,0.4); }
 
-    /* ── 採点詳細 ── */
-    .score-details { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
-    .score-item { background: #F9FAFB; border-radius: 12px; padding: 10px 6px; text-align: center; }
-    .score-item-num  { font-size: 20px; font-weight: 900; color: var(--purple); }
-    .score-item-label { font-size: 10px; font-weight: 700; color: var(--gray); }
+
 
     /* ── フィードバック ── */
     .feedback-section { margin-bottom: 10px; }
@@ -347,21 +343,7 @@
       </div>
     </div>
 
-    <!-- 3項目スコア -->
-    <div class="score-details">
-      <div class="score-item">
-        <div class="score-item-num" id="accentScore">-</div>
-        <div class="score-item-label">アクセント</div>
-      </div>
-      <div class="score-item">
-        <div class="score-item-num" id="rhythmScore">-</div>
-        <div class="score-item-label">リズム</div>
-      </div>
-      <div class="score-item">
-        <div class="score-item-num" id="intonScore">-</div>
-        <div class="score-item-label">イントネーション</div>
-      </div>
-    </div>
+
 
     <!-- 聞き取り -->
     <div class="feedback-section">
@@ -663,7 +645,8 @@ async function processAnswer(base64) {
 - 頑張って発音できていれば70〜80点を基準に。明らかに上手なら85〜90点。ほぼ完璧なら95点
 
 以下のJSON形式のみで回答してください（コードブロック不要）:
-{"transcript":"聞き取った英語","accent_score":点数,"rhythm_score":点数,"intonation_score":点数,"total_score":3つの平均点,"bad_words":["発音が悪かった単語（問題なければ空配列[]）"],"praise":"良かった点を1〜2文で日本語で","warning":"問題があった場合のみ：単語を具体的に挙げ口の形・舌の位置まで説明。問題なければnull","hint":"問題があった場合のみ：次回意識するポイントを1〜2文。問題なければnull"}`;
+{"transcript":"聞き取った英語","total_score":点数,"bad_words":["発音が悪かった単語（問題なければ空配列[]）"],"praise":"良かった点を1〜2文で日本語で","warning":"問題があった場合のみ：単語を具体的に挙げ口の形・舌の位置まで説明。問題なければnull","hint":"問題があった場合のみ：次回意識するポイントを1〜2文。問題なければnull"}
+※bad_wordsが空配列の場合はtotal_scoreを100点にしてください。`;
 
   try {
     const res = await fetch('/api/correct', {
@@ -688,7 +671,7 @@ async function processAnswer(base64) {
     if (!jsonMatch) throw new Error('AIの返答を解析できませんでした。');
     const result = JSON.parse(jsonMatch[0]);
 
-    const total = Number(result.total_score) || Math.round((Number(result.accent_score) + Number(result.rhythm_score) + Number(result.intonation_score)) / 3);
+    const total = (result.bad_words && result.bad_words.length === 0) ? 100 : (Number(result.total_score) || 0);
     pendingScore = total;
 
     completeProgress();
@@ -704,9 +687,7 @@ async function processAnswer(base64) {
     document.getElementById('resultCard').style.display = 'block';
     document.getElementById('scoreBig').textContent = total;
     document.getElementById('scoreTitle').textContent = scoreTitle;
-    document.getElementById('accentScore').textContent = result.accent_score;
-    document.getElementById('rhythmScore').textContent = result.rhythm_score;
-    document.getElementById('intonScore').textContent = result.intonation_score;
+
     document.getElementById('transcriptText').textContent = result.transcript || '（聞き取れませんでした）';
 
     // フィードバック3ブロック表示
