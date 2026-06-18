@@ -104,6 +104,19 @@
     .model-audio-label { font-size: 12px; font-weight: 700; color: #6D28D9; }
     .model-audio-sub   { font-size: 11px; color: var(--gray); }
 
+    /* ボイス切り替え */
+    .voice-toggle { display: flex; gap: 6px; flex-shrink: 0; }
+    .voice-btn {
+      padding: 5px 10px; border-radius: 99px; border: 1.5px solid #DDD6FE;
+      background: white; color: var(--purple); font-size: 11px; font-weight: 700;
+      cursor: pointer; font-family: 'Nunito', sans-serif; transition: all 0.15s;
+    }
+    .voice-btn.active {
+      background: linear-gradient(135deg, var(--purple) 0%, var(--pink) 100%);
+      color: white; border-color: transparent;
+    }
+    .voice-btn:hover:not(.active) { background: var(--purple-light); }
+
     /* ── 結果カード ── */
     .result-card {
       background: var(--card);
@@ -292,9 +305,13 @@
     <div style="margin-top: 14px;">
       <div class="model-audio-wrap">
         <button class="play-model-btn" id="playModelBtn" onclick="playModelAudio()" title="お手本を聴く">▶</button>
-        <div>
+        <div style="flex:1;">
           <div class="model-audio-label">🎧 お手本を聴く</div>
           <div class="model-audio-sub">ネイティブの発音を確認しよう</div>
+        </div>
+        <div class="voice-toggle">
+          <button class="voice-btn active" id="voiceFemale" onclick="setVoice('female')">👩 女性</button>
+          <button class="voice-btn" id="voiceMale" onclick="setVoice('male')">👨 男性</button>
         </div>
       </div>
     </div>
@@ -512,29 +529,56 @@ function showQuestion() {
 
 startChallenge();
 
-// ── お手本音声（TTS） ────────────────────────────────────────
-function playModelAudio() {
-  const q = challengeQuestions[currentIndex];
-  const utterance = new SpeechSynthesisUtterance(q.en);
-  utterance.lang = 'en-US';
-  utterance.rate = 0.9;
-  utterance.pitch = 1.0;
+// ── お手本音声（ElevenLabs TTS） ─────────────────────────────
+let currentModelAudio = null;
+const VOICES = {
+  female: 'EXAVITQu4vr4xnSDxMaL', // Sarah
+  male:   'TxGEqnHWrfWFTfGW9XjX',  // Josh
+};
+let selectedVoice = 'female';
 
-  // 英語の音声を優先して選択
-  const voices = speechSynthesis.getVoices();
-  const enVoice = voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female'))
-                || voices.find(v => v.lang === 'en-US')
-                || voices.find(v => v.lang.startsWith('en'));
-  if (enVoice) utterance.voice = enVoice;
-
-  speechSynthesis.cancel();
-  speechSynthesis.speak(utterance);
+function setVoice(gender) {
+  selectedVoice = gender;
+  document.getElementById('voiceFemale').classList.toggle('active', gender === 'female');
+  document.getElementById('voiceMale').classList.toggle('active', gender === 'male');
 }
 
-// ブラウザロード時に音声リストを取得
-if (typeof speechSynthesis !== 'undefined') {
-  speechSynthesis.getVoices();
-  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+async function playModelAudio() {
+  const q = challengeQuestions[currentIndex];
+
+  // 再生中なら停止
+  if (currentModelAudio) {
+    currentModelAudio.pause();
+    currentModelAudio = null;
+  }
+
+  const btn = document.getElementById('playModelBtn');
+  const btn2 = document.getElementById('resultModelBtn');
+  [btn, btn2].forEach(b => { if(b) b.textContent = '⏳'; });
+
+  try {
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: q.en, voiceId: selectedVoice })
+    });
+    if (!res.ok) throw new Error('TTS error');
+    const blob = await res.blob();
+    currentModelAudio = new Audio(URL.createObjectURL(blob));
+    currentModelAudio.onended = () => {
+      [btn, btn2].forEach(b => { if(b) b.textContent = '▶'; });
+    };
+    currentModelAudio.play();
+    [btn, btn2].forEach(b => { if(b) b.textContent = '🔊'; });
+  } catch(e) {
+    // フォールバック：Web Speech API
+    [btn, btn2].forEach(b => { if(b) b.textContent = '▶'; });
+    const utterance = new SpeechSynthesisUtterance(q.en);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.9;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+  }
 }
 
 // ── ユーザー音声再生 ─────────────────────────────────────────
@@ -601,20 +645,7 @@ async function processAnswer(base64) {
   showProgress();
   document.getElementById('recBtn').disabled = true;
 
-  const prompt = `あなたはプロの英語発音コーチです。
-生徒に以下の英文を発音させました。
-お手本の文: "${q.en}"
-発音カテゴリ: ${cat.label}（${q.hint}）
-
-生徒の音声を聞いて、以下のJSONのみで回答してください（コードブロック不要）:
-{
-  "transcript": "聞き取った生徒の英語",
-  "accent_score": 0-100の整数,
-  "rhythm_score": 0-100の整数,
-  "intonation_score": 0-100の整数,
-  "total_score": 3つの平均（整数）,
-  "feedback": "まず褒める一言（日本語）。次に「⚠️ 注意点：」という見出しの後に、${cat.label}に特有の発音上の問題点を具体的に日本語で説明してください。最後に励ましの一言を添えてください。"
-}`;
+  const prompt = `あなたはプロの英語発音コーチです。生徒がお手本「${q.en}」を発音しました。発音カテゴリは${cat.label}です。以下のJSON形式のみで回答してください:{"transcript":"聞き取った英語","accent_score":点数,"rhythm_score":点数,"intonation_score":点数,"total_score":平均点,"feedback":"良かった点を一言。⚠️ 注意点：${cat.label}の問題点を日本語で。励ましの一言。"}`;
 
   try {
     const res = await fetch('/api/correct', {
@@ -624,11 +655,17 @@ async function processAnswer(base64) {
     });
     const data = await res.json();
 
+    // デバッグ：レスポンス全体をコンソールに出力
+    console.log('API response:', JSON.stringify(data));
+
     if (!data.candidates || !data.candidates[0]) {
-      throw new Error('AIの応答がありませんでした。もう一度お試しください。');
+      // エラー詳細を画面に表示
+      const detail = data.error?.message || data.detail || JSON.stringify(data);
+      throw new Error(`AIの応答エラー: ${detail}`);
     }
 
     const rawText = data.candidates[0].content.parts[0].text;
+    console.log('Raw text:', rawText);
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('AIの返答を解析できませんでした。');
     const result = JSON.parse(jsonMatch[0]);
