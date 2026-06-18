@@ -663,7 +663,7 @@ async function processAnswer(base64) {
 - 頑張って発音できていれば70〜80点を基準に。明らかに上手なら85〜90点。ほぼ完璧なら95点
 
 以下のJSON形式のみで回答してください（コードブロック不要）:
-{"transcript":"聞き取った英語","accent_score":点数,"rhythm_score":点数,"intonation_score":点数,"total_score":3つの平均点,"bad_words":["発音が悪かった単語1","単語2"],"praise":"良かった点を1〜2文で日本語で","warning":"問題のあった単語を具体的に挙げ（例:「reallyのRが曖昧で舌が丸まっていない」）口の形・舌の位置まで日本語で詳しく説明","hint":"次回意識する具体的なポイントを1〜2文で日本語で"}`;
+{"transcript":"聞き取った英語","accent_score":点数,"rhythm_score":点数,"intonation_score":点数,"total_score":3つの平均点,"bad_words":["発音が悪かった単語（問題なければ空配列[]）"],"praise":"良かった点を1〜2文で日本語で","warning":"問題があった場合のみ：単語を具体的に挙げ口の形・舌の位置まで説明。問題なければnull","hint":"問題があった場合のみ：次回意識するポイントを1〜2文。問題なければnull"}`;
 
   try {
     const res = await fetch('/api/correct', {
@@ -718,8 +718,8 @@ async function processAnswer(base64) {
       document.getElementById('fbPraiseText').textContent = result.praise;
     }
 
-    // 注意点（問題単語をハイライト）
-    if (result.warning) {
+    // 注意点（問題単語をハイライト）・問題なければ非表示
+    if (result.warning && result.warning !== 'null') {
       document.getElementById('fbWarning').style.display = 'block';
       let warningHtml = escHtml(result.warning);
       badWords.forEach(word => {
@@ -732,8 +732,8 @@ async function processAnswer(base64) {
       document.getElementById('fbWarningText').innerHTML = warningHtml;
     }
 
-    // ヒント
-    if (result.hint) {
+    // ヒント・問題なければ非表示
+    if (result.hint && result.hint !== 'null') {
       document.getElementById('fbHint').style.display = 'block';
       document.getElementById('fbHintText').textContent = result.hint;
     }
