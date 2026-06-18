@@ -643,53 +643,43 @@ async function processAnswer(base64) {
   showProgress();
   document.getElementById('recBtn').disabled = true;
 
-  const prompt = `あなたはネイティブ英語発音の厳格なコーチです。採点基準はネイティブスピーカーの発音を100点とします。
-お手本:「${q.en}」 カテゴリ:${cat.label}
-
-【採点基準】
-- ネイティブスピーカーの耳で評価する。「通じる」ではなく「ネイティブらしいか」を基準にする
-- ${cat.label}に特有の音素ミス：1箇所-10点
-- 以下の日本人特有の訛りも必ず減点対象にする：
-  ・RをLっぽく/ラリルレロで代替している → -10点
-  ・THを「ス/ズ/ダ/デ」で代替している → -10点
-  ・VをBで代替している → -10点
-  ・語尾の子音に余分な母音をつける（「bed」→「ベッドゥ」「make」→「メイクゥ」）→ -8点
-  ・単語の強弱アクセントが平坦（日本語読みになっている）→ -8点
-  ・文全体のリズムが均等すぎる（英語は強弱のリズム言語）→ -8点
-  ・機能語（a/the/of/to）を強く読みすぎている → -5点
-- 基準：ネイティブレベル=95点、訛りがほぼない=85〜94点、小さな訛りあり=70〜84点、日本語訛りが目立つ=55〜69点、多数のミス=54点以下
-- 「なんとなく通じる」程度では70点以上をつけない
-
-以下のJSON形式のみで回答してください（コードブロック不要）:
-{"transcript":"聞き取った英語","total_score":点数,"bad_words":["発音が悪かった単語（問題なければ空配列[]）"],"praise":"良かった点を1〜2文で日本語で","warning":"問題があった場合のみ：問題のあった単語を挙げ、日本人が陥りがちな具体的な間違い（例:舌の位置・唇の形・余分な母音など）を指摘。ネイティブとの違いを明確に説明。問題なければnull","hint":"問題があった場合のみ：ネイティブらしくするために次回意識する具体的な口の動きや意識ポイントを1〜2文で。問題なければnull"}
-※bad_wordsが空配列の場合はtotal_scoreを100点にしてください。`;
-
   try {
-    const res = await fetch('/api/correct', {
+    // Step1: Azure Pronunciation Assessment で採点
+    const azureRes = await fetch('/api/pronunciation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64Audio: base64, referenceText: q.en })
+    });
+    const azureData = await azureRes.json();
+    console.log('Azure result:', azureData);
+
+    if (azureData.error) throw new Error(azureData.error);
+
+    // Step2: Gemini でフィードバック文章を生成
+    const badWordNames = azureData.badWords.map(w => w.word);
+    const wordDetails = azureData.allWords.map(w => `${w.word}:${w.accuracy}点`).join(', ');
+    const prompt = `あなたは英語発音コーチです。生徒が「${q.en}」を発音しました（カテゴリ:${cat.label}）。
+Azure音声評価の結果：総合${azureData.pronScore}点、精度${azureData.accuracyScore}点、流暢さ${azureData.fluencyScore}点、韻律${azureData.prosodyScore}点
+単語別スコア：${wordDetails}
+問題のあった単語：${badWordNames.length > 0 ? badWordNames.join(', ') : 'なし'}
+以下のJSON形式のみで回答してください（コードブロック不要）:
+{"praise":"良かった点を1〜2文で日本語で","warning":${badWordNames.length > 0 ? '"問題単語の具体的な発音ミス（舌・唇の位置含む）を日本語で"' : 'null'},"hint":${badWordNames.length > 0 ? '"次回意識するポイントを1〜2文で"' : 'null'}}`;
+
+    const geminiRes = await fetch('/api/correct', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ base64Audio: base64, prompt })
     });
-    const data = await res.json();
+    const geminiData = await geminiRes.json();
+    let feedback = { praise: '', warning: null, hint: null };
+    try {
+      const rawText = geminiData.candidates[0].content.parts[0].text;
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) feedback = JSON.parse(jsonMatch[0]);
+    } catch(e) { console.warn('Gemini feedback parse error', e); }
 
-    // デバッグ：レスポンス全体をコンソールに出力
-    console.log('API response:', JSON.stringify(data));
-
-    if (!data.candidates || !data.candidates[0]) {
-      // エラー詳細を画面に表示
-      const detail = data.error?.message || data.detail || JSON.stringify(data);
-      throw new Error(`AIの応答エラー: ${detail}`);
-    }
-
-    const rawText = data.candidates[0].content.parts[0].text;
-    console.log('Raw text:', rawText);
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('AIの返答を解析できませんでした。');
-    const result = JSON.parse(jsonMatch[0]);
-
-    const total = (result.bad_words && result.bad_words.length === 0) ? 100 : (Number(result.total_score) || 0);
+    const total = azureData.pronScore;
     pendingScore = total;
-
     completeProgress();
 
     // 累計計算
@@ -697,55 +687,42 @@ async function processAnswer(base64) {
     const goodCount = tentative.filter(s => s >= 80).length;
     const avg = Math.round(tentative.reduce((a, b) => a + b, 0) / tentative.length);
 
-    // スコアに応じたタイトル
-    let scoreTitle = total >= 90 ? '素晴らしい！🌟' : total >= 75 ? 'よくできました！✨' : total >= 60 ? 'いい調子！💪' : 'もう一息！頑張れ！🌱';
+    const scoreTitle = total >= 90 ? '素晴らしい！🌟' : total >= 75 ? 'よくできました！✨' : total >= 60 ? 'いい調子！💪' : 'もう一息！頑張れ！🌱';
 
     document.getElementById('resultCard').style.display = 'block';
     document.getElementById('scoreBig').textContent = total;
     document.getElementById('scoreTitle').textContent = scoreTitle;
 
-    document.getElementById('transcriptText').textContent = result.transcript || '（聞き取れませんでした）';
-
-    // フィードバック3ブロック表示
-    const badWords = result.bad_words || [];
-
-    // 褒め
-    if (result.praise) {
-      document.getElementById('fbPraise').style.display = 'block';
-      document.getElementById('fbPraiseText').textContent = result.praise;
-    }
-
-    // 注意点（問題単語をハイライト）・問題なければ非表示
-    if (result.warning && result.warning !== 'null') {
-      document.getElementById('fbWarning').style.display = 'block';
-      let warningHtml = escHtml(result.warning);
-      badWords.forEach(word => {
-        const escaped = escHtml(word);
-        warningHtml = warningHtml.replace(
-          new RegExp(escaped, 'g'),
-          `<span class="word-bad">${escaped}</span>`
-        );
-      });
-      document.getElementById('fbWarningText').innerHTML = warningHtml;
-    }
-
-    // ヒント・問題なければ非表示
-    if (result.hint && result.hint !== 'null') {
-      document.getElementById('fbHint').style.display = 'block';
-      document.getElementById('fbHintText').textContent = result.hint;
-    }
-
-    // 聞き取り結果の問題単語もハイライト
-    const transcript = result.transcript || '（聞き取れませんでした）';
-    let transcriptHtml = escHtml(transcript);
-    badWords.forEach(word => {
-      const escaped = escHtml(word);
+    // 聞き取り結果＋問題単語ハイライト
+    const badWords = azureData.badWords || [];
+    let transcriptHtml = escHtml(azureData.transcript || '（聞き取れませんでした）');
+    badWords.forEach(w => {
+      const escaped = escHtml(w.word);
       transcriptHtml = transcriptHtml.replace(
-        new RegExp(escaped, 'gi'),
+        new RegExp('\\b' + escaped + '\\b', 'gi'),
         `<span class="word-bad">${escaped}</span>`
       );
     });
     document.getElementById('transcriptText').innerHTML = transcriptHtml;
+
+    // フィードバック3ブロック
+    if (feedback.praise) {
+      document.getElementById('fbPraise').style.display = 'block';
+      document.getElementById('fbPraiseText').textContent = feedback.praise;
+    }
+    if (feedback.warning && feedback.warning !== 'null') {
+      document.getElementById('fbWarning').style.display = 'block';
+      let warningHtml = escHtml(feedback.warning);
+      badWords.forEach(w => {
+        const escaped = escHtml(w.word);
+        warningHtml = warningHtml.replace(new RegExp(escaped, 'gi'), `<span class="word-bad">${escaped}</span>`);
+      });
+      document.getElementById('fbWarningText').innerHTML = warningHtml;
+    }
+    if (feedback.hint && feedback.hint !== 'null') {
+      document.getElementById('fbHint').style.display = 'block';
+      document.getElementById('fbHintText').textContent = feedback.hint;
+    }
 
     document.getElementById('goodCount').textContent = `${goodCount} / ${tentative.length}`;
     document.getElementById('avgScore').textContent = avg;
