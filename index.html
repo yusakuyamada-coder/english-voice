@@ -725,15 +725,33 @@ async function processAnswer(base64, mimeType) {
 
     if (azureData.error) throw new Error(azureData.error);
 
-    // Step2: Gemini でフィードバック文章を生成
+    // Step2: Gemini が音声を直接聞いてカテゴリ特有のミスを追加チェック＋フィードバック生成
     const badWordNames = azureData.badWords.map(w => w.word);
     const wordDetails = azureData.allWords.map(w => `${w.word}:${w.accuracy}点`).join(', ');
-    const prompt = `あなたは英語発音コーチです。生徒が「${q.en}」を発音しました（カテゴリ:${cat.label}）。
-Azure音声評価の結果：総合${azureData.pronScore}点、精度${azureData.accuracyScore}点、流暢さ${azureData.fluencyScore}点、韻律${azureData.prosodyScore}点
-単語別スコア：${wordDetails}
-問題のあった単語：${badWordNames.length > 0 ? badWordNames.join(', ') : 'なし'}
-以下のJSON形式のみで回答してください（コードブロック不要）:
-{"praise":"良かった点を1〜2文で日本語で","warning":${badWordNames.length > 0 ? '"問題単語の具体的な発音ミス（舌・唇の位置含む）を日本語で"' : 'null'},"hint":${badWordNames.length > 0 ? '"次回意識するポイントを1〜2文で"' : 'null'}}`;
+    const phonemeDetails = azureData.badWords.map(w =>
+      `${w.word}(${(w.phonemes||[]).map(p => `/${p.phoneme}/:${p.score}点`).join(',')})`
+    ).join(', ');
+
+    const prompt = `あなたはネイティブ英語発音の厳格なコーチです。生徒が「${q.en}」を発音した音声を直接聞いて評価してください。
+発音カテゴリ：${cat.label}
+
+Azureの機械評価結果（参考）：
+- 総合：${azureData.pronScore}点、精度：${azureData.accuracyScore}点、流暢さ：${azureData.fluencyScore}点、韻律：${azureData.prosodyScore}点
+- 単語別：${wordDetails}
+- 問題音素：${phonemeDetails || 'なし'}
+
+【あなたのタスク】
+1. 音声を直接聞いて、特に${cat.label}に特有のミスを耳で確認する
+2. 以下の日本人特有ミスを重点チェック：
+   - LとR：Rが「ラリルレロ」になっていないか、Lで舌が歯茎に触れているか
+   - TH：「ス/ズ/ダ」で代替していないか
+   - VとB：VでBを使っていないか（上唇ではなく下唇を使うべき）
+   - リンキング：単語が自然につながっているか
+3. Azureが高得点でも、あなたが聞いて明らかにネイティブと違う場合は adjusted_score を下げる
+4. 問題なければ adjusted_score はAzureのスコアのまま
+
+以下のJSON形式のみで回答（コードブロック不要）:
+{"adjusted_score":0-100の整数,"praise":"良かった点1〜2文（日本語）","warning":"${cat.label}特有の問題を単語・音素レベルで具体的に（問題なければnull）","hint":"次回の改善ポイント1〜2文（問題なければnull）","gemini_bad_words":["Geminiが問題と判断した単語（なければ空配列）"]}`;
 
     const geminiRes = await fetch('/api/correct', {
       method: 'POST',
@@ -741,14 +759,15 @@ Azure音声評価の結果：総合${azureData.pronScore}点、精度${azureData
       body: JSON.stringify({ base64Audio: base64, prompt })
     });
     const geminiData = await geminiRes.json();
-    let feedback = { praise: '', warning: null, hint: null };
+    let feedback = { adjusted_score: azureData.pronScore, praise: '', warning: null, hint: null, gemini_bad_words: [] };
     try {
       const rawText = geminiData.candidates[0].content.parts[0].text;
       const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) feedback = JSON.parse(jsonMatch[0]);
+      if (jsonMatch) feedback = { ...feedback, ...JSON.parse(jsonMatch[0]) };
     } catch(e) { console.warn('Gemini feedback parse error', e); }
 
-    const total = azureData.pronScore;
+    // AzureとGeminiのスコアを合算（6:4の重み）
+    const total = Math.round(azureData.pronScore * 0.6 + (feedback.adjusted_score || azureData.pronScore) * 0.4);
     pendingScore = total;
     completeProgress();
 
@@ -763,14 +782,27 @@ Azure音声評価の結果：総合${azureData.pronScore}点、精度${azureData
     document.getElementById('scoreBig').textContent = total;
     document.getElementById('scoreTitle').textContent = scoreTitle;
 
-    // 単語スコアバー
+    // AzureとGeminiの問題単語をマージ
     const allWords = azureData.allWords || [];
-    const badWords = azureData.badWords || [];
-    if (allWords.length > 0) {
+    const geminiBadWordNames = feedback.gemini_bad_words || [];
+    // Geminiが指摘した単語をallWordsに反映（スコアが高くても問題単語として扱う）
+    const mergedAllWords = allWords.map(w => {
+      const isGeminiBad = geminiBadWordNames.some(g => g.toLowerCase() === w.word.toLowerCase());
+      return isGeminiBad && w.accuracy > 70
+        ? { ...w, accuracy: Math.min(w.accuracy, 65), errorType: 'Mispronunciation' }
+        : w;
+    });
+    const badWords = [
+      ...azureData.badWords,
+      ...geminiBadWordNames
+        .filter(g => !azureData.badWords.some(b => b.word.toLowerCase() === g.toLowerCase()))
+        .map(g => ({ word: g, accuracy: 60, errorType: 'Mispronunciation', phonemes: [] }))
+    ];
+    if (mergedAllWords.length > 0) {
       document.getElementById('wordScoreSection').style.display = 'block';
       const wordScoresEl = document.getElementById('wordScores');
       wordScoresEl.innerHTML = '';
-      allWords.forEach(w => {
+      mergedAllWords.forEach(w => {
         const sc = w.accuracy;
         const barClass = sc >= 80 ? 'bar-good' : sc >= 60 ? 'bar-ok' : 'bar-bad';
         const numClass = sc >= 80 ? 'num-good' : sc >= 60 ? 'num-ok'  : 'num-bad';
