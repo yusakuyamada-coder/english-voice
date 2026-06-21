@@ -81,15 +81,15 @@
       line-height: 1.5; margin-bottom: 6px;
     }
     .question-ja {
-      font-size: 13px; color: var(--gray); font-weight: 600;
+      font-size: 13px; color: var(--gray); font-weight: 600; text-align: center;
     }
 
     /* ── お手本音声プレーヤー ── */
     .model-audio-wrap {
       background: linear-gradient(135deg, var(--purple-light) 0%, var(--pink-light) 100%);
       border-radius: 14px; padding: 10px 12px;
-      display: flex; align-items: center; gap: 8px;
-      flex-wrap: nowrap; min-width: 0;
+      display: flex; flex-direction: column; gap: 8px;
+      min-width: 0; width: 100%;
     }
     .play-model-btn {
       width: 40px; height: 40px; border-radius: 50%;
@@ -308,14 +308,16 @@
     <div id="questionJa" class="question-ja">読み込み中...</div>
     <div style="margin-top: 14px;">
       <div class="model-audio-wrap">
-        <button class="play-model-btn" id="playModelBtn" onclick="playModelAudio()" title="お手本を聴く">▶</button>
-        <div style="flex:1;">
-          <div class="model-audio-label">🎧 お手本を聴く</div>
-          <div class="model-audio-sub">ネイティブの発音を確認しよう</div>
-        </div>
-        <div class="voice-toggle">
-          <button class="voice-btn active" id="voiceFemale" onclick="setVoice('female')">👩 女性</button>
-          <button class="voice-btn" id="voiceMale" onclick="setVoice('male')">👨 男性</button>
+        <div style="display:flex;align-items:center;gap:10px;width:100%;">
+          <button class="play-model-btn" id="playModelBtn" onclick="playModelAudio()" title="お手本を聴く">▶</button>
+          <div style="flex:1;min-width:0;">
+            <div class="model-audio-label">🎧 お手本を聴く</div>
+            <div class="model-audio-sub">ネイティブの発音を確認しよう</div>
+          </div>
+          <div class="voice-toggle">
+            <button class="voice-btn active" id="voiceFemale" onclick="setVoice('female')">👩 女性</button>
+            <button class="voice-btn" id="voiceMale" onclick="setVoice('male')">👨 男性</button>
+          </div>
         </div>
       </div>
     </div>
