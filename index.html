@@ -87,8 +87,9 @@
     /* ── お手本音声プレーヤー ── */
     .model-audio-wrap {
       background: linear-gradient(135deg, var(--purple-light) 0%, var(--pink-light) 100%);
-      border-radius: 14px; padding: 12px 14px;
-      display: flex; align-items: center; gap: 10px;
+      border-radius: 14px; padding: 10px 12px;
+      display: flex; align-items: center; gap: 8px;
+      flex-wrap: nowrap; min-width: 0;
     }
     .play-model-btn {
       width: 40px; height: 40px; border-radius: 50%;
@@ -101,15 +102,16 @@
     }
     .play-model-btn:hover { transform: scale(1.08); }
     .play-model-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-    .model-audio-label { font-size: 12px; font-weight: 700; color: #6D28D9; }
-    .model-audio-sub   { font-size: 11px; color: var(--gray); }
+    .model-audio-label { font-size: 12px; font-weight: 700; color: #6D28D9; white-space: nowrap; }
+    .model-audio-sub   { font-size: 10px; color: var(--gray); white-space: nowrap; }
 
     /* ボイス切り替え */
     .voice-toggle { display: flex; gap: 6px; flex-shrink: 0; }
     .voice-btn {
-      padding: 5px 10px; border-radius: 99px; border: 1.5px solid #DDD6FE;
-      background: white; color: var(--purple); font-size: 11px; font-weight: 700;
+      padding: 4px 8px; border-radius: 99px; border: 1.5px solid #DDD6FE;
+      background: white; color: var(--purple); font-size: 10px; font-weight: 700;
       cursor: pointer; font-family: 'Nunito', sans-serif; transition: all 0.15s;
+      white-space: nowrap; flex-shrink: 0;
     }
     .voice-btn.active {
       background: linear-gradient(135deg, var(--purple) 0%, var(--pink) 100%);
