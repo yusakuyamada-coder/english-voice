@@ -723,7 +723,8 @@ Azureの機械評価結果（参考）：
     } catch(e) { console.warn('Gemini feedback parse error', e); }
 
     // AzureとGeminiのスコアを合算（6:4の重み）
-    const total = Math.round(azureData.pronScore * 0.7 + (feedback.adjusted_score || azureData.pronScore) * 0.3);
+    const rawTotal = Math.round(azureData.pronScore * 0.7 + (feedback.adjusted_score || azureData.pronScore) * 0.3);
+    const total = rawTotal >= 92 ? 100 : rawTotal;
     pendingScore = total;
     completeProgress();
 
@@ -787,7 +788,7 @@ Azureの機械評価結果（参考）：
       document.getElementById('fbPraise').style.display = 'block';
       document.getElementById('fbPraiseText').textContent = feedback.praise;
     }
-    if (feedback.warning && feedback.warning !== 'null') {
+    if (total < 90 && feedback.warning && feedback.warning !== 'null') {
       document.getElementById('fbWarning').style.display = 'block';
       let warningHtml = escHtml(feedback.warning);
       badWords.forEach(w => {
@@ -796,7 +797,7 @@ Azureの機械評価結果（参考）：
       });
       document.getElementById('fbWarningText').innerHTML = warningHtml;
     }
-    if (feedback.hint && feedback.hint !== 'null') {
+    if (total < 90 && feedback.hint && feedback.hint !== 'null') {
       document.getElementById('fbHint').style.display = 'block';
       document.getElementById('fbHintText').textContent = feedback.hint;
     }
