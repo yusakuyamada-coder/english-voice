@@ -703,7 +703,7 @@ Azureの機械評価結果（参考）：
    - TH：「ス/ズ/ダ」で代替していないか
    - VとB：VでBを使っていないか（上唇ではなく下唇を使うべき）
    - リンキング：単語が自然につながっているか
-3. Azureが高得点でも、あなたが聞いて明らかにネイティブと違う場合は adjusted_score を下げる
+3. Azureが高得点の場合は基本的にそのまま。よほど明らかにネイティブと違う場合のみ adjusted_score を少し下げる
 4. 問題なければ adjusted_score はAzureのスコアのまま
 
 以下のJSON形式のみで回答（コードブロック不要）:
@@ -723,7 +723,7 @@ Azureの機械評価結果（参考）：
     } catch(e) { console.warn('Gemini feedback parse error', e); }
 
     // AzureとGeminiのスコアを合算（6:4の重み）
-    const total = Math.round(azureData.pronScore * 0.6 + (feedback.adjusted_score || azureData.pronScore) * 0.4);
+    const total = Math.round(azureData.pronScore * 0.7 + (feedback.adjusted_score || azureData.pronScore) * 0.3);
     pendingScore = total;
     completeProgress();
 
@@ -762,7 +762,7 @@ Azureの機械評価結果（参考）：
       if (w.errorType === 'Insertion') return { ...w, accuracy: Math.min(w.accuracy, 70) };
       const isGeminiBad = geminiBadWordNames.some(g => g.toLowerCase() === w.word.toLowerCase());
       return isGeminiBad && w.accuracy > 70
-        ? { ...w, accuracy: Math.min(w.accuracy, 65), errorType: 'Mispronunciation' }
+        ? { ...w, accuracy: Math.min(w.accuracy, 75), errorType: 'Mispronunciation' }
         : w;
     });
     const badWords = [
