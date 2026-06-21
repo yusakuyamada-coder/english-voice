@@ -308,16 +308,16 @@
     <div id="questionJa" class="question-ja">読み込み中...</div>
     <div style="margin-top: 14px;">
       <div class="model-audio-wrap">
-        <div style="display:flex;align-items:center;gap:10px;width:100%;">
+        <div style="display:flex;align-items:center;gap:10px;">
           <button class="play-model-btn" id="playModelBtn" onclick="playModelAudio()" title="お手本を聴く">▶</button>
-          <div style="flex:1;min-width:0;">
+          <div>
             <div class="model-audio-label">🎧 お手本を聴く</div>
             <div class="model-audio-sub">ネイティブの発音を確認しよう</div>
           </div>
-          <div class="voice-toggle">
-            <button class="voice-btn active" id="voiceFemale" onclick="setVoice('female')">👩 女性</button>
-            <button class="voice-btn" id="voiceMale" onclick="setVoice('male')">👨 男性</button>
-          </div>
+        </div>
+        <div class="voice-toggle" style="justify-content:center;">
+          <button class="voice-btn active" id="voiceFemale" onclick="setVoice('female')">👩 女性</button>
+          <button class="voice-btn" id="voiceMale" onclick="setVoice('male')">👨 男性</button>
         </div>
       </div>
     </div>
