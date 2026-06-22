@@ -315,9 +315,15 @@
             <div class="model-audio-sub">ネイティブの発音を確認しよう</div>
           </div>
         </div>
-        <div class="voice-toggle" style="justify-content:center;">
-          <button class="voice-btn active" id="voiceFemale" onclick="setVoice('female')">👩 女性</button>
-          <button class="voice-btn" id="voiceMale" onclick="setVoice('male')">👨 男性</button>
+        <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">
+          <div class="voice-toggle">
+            <button class="voice-btn active" id="voiceFemale" onclick="setVoice('female')">👩 女性</button>
+            <button class="voice-btn" id="voiceMale" onclick="setVoice('male')">👨 男性</button>
+          </div>
+          <div class="voice-toggle">
+            <button class="voice-btn" id="speedSlow" onclick="setSpeed(0.75)">🐢 ゆっくり</button>
+            <button class="voice-btn active" id="speedNormal" onclick="setSpeed(1.0)">🎯 標準</button>
+          </div>
         </div>
       </div>
     </div>
@@ -618,10 +624,18 @@ const VOICES = {
 };
 let selectedVoice = 'female';
 
+let selectedSpeed = 1.0;
+
 function setVoice(gender) {
   selectedVoice = gender;
   document.getElementById('voiceFemale').classList.toggle('active', gender === 'female');
   document.getElementById('voiceMale').classList.toggle('active', gender === 'male');
+}
+
+function setSpeed(speed) {
+  selectedSpeed = speed;
+  document.getElementById('speedSlow').classList.toggle('active', speed === 0.75);
+  document.getElementById('speedNormal').classList.toggle('active', speed === 1.0);
 }
 
 async function playModelAudio() {
@@ -641,7 +655,7 @@ async function playModelAudio() {
     const res = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: q.en, voiceId: selectedVoice })
+      body: JSON.stringify({ text: q.en, voiceId: selectedVoice, speed: selectedSpeed })
     });
     if (!res.ok) throw new Error('TTS error');
     const blob = await res.blob();
