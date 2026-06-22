@@ -704,21 +704,27 @@ async function toggleRecord() {
         const audioCtx = new AudioContext({ sampleRate: 16000 });
         const decoded = await audioCtx.decodeAudioData(arrayBuf);
         await audioCtx.close();
-
-        // モノラルPCMデータを取得
         const pcmData = decoded.getChannelData(0);
         const wavBuffer = pcmToWav(pcmData, 16000);
         const base64 = arrayBufferToBase64(wavBuffer);
         processAnswer(base64, 'audio/wav');
       } catch(e) {
         console.error('PCM変換エラー:', e);
-        // フォールバック：元のblob
-        const base64 = await new Promise(r => {
-          const rd = new FileReader();
-          rd.onload = () => r(rd.result.split(',')[1]);
-          rd.readAsDataURL(blob);
-        });
-        processAnswer(base64, recordingMimeType);
+        try {
+          // フォールバック：元のblobをそのまま送る
+          const base64 = await new Promise((resolve, reject) => {
+            const rd = new FileReader();
+            rd.onload = () => resolve(rd.result.split(',')[1]);
+            rd.onerror = reject;
+            rd.readAsDataURL(blob);
+          });
+          processAnswer(base64, recordingMimeType);
+        } catch(e2) {
+          console.error('フォールバックエラー:', e2);
+          completeProgress();
+          document.getElementById('statusText').innerHTML = '<span style="color:#ef4444">音声の処理に失敗しました。もう一度お試しください。</span>';
+          document.getElementById('recBtn').disabled = false;
+        }
       }
     };
     // 0.3秒後に録音開始（Azureが最初の音を取りこぼさないように）
@@ -859,6 +865,7 @@ Azureの機械評価結果（参考）：
     // 聞き取り結果＋問題単語ハイライト
     let transcriptHtml = escHtml(azureData.transcript || '（聞き取れませんでした）');
     badWords.forEach(w => {
+      if (w.word.length <= 1) return; // 1文字はハイライト対象外
       const escaped = escHtml(w.word);
       transcriptHtml = transcriptHtml.replace(
         new RegExp('\b' + escaped + '\b', 'gi'),
@@ -876,8 +883,9 @@ Azureの機械評価結果（参考）：
       document.getElementById('fbWarning').style.display = 'block';
       let warningHtml = escHtml(feedback.warning);
       badWords.forEach(w => {
+        if (w.word.length <= 1) return;
         const escaped = escHtml(w.word);
-        warningHtml = warningHtml.replace(new RegExp(escaped, 'gi'), `<span class="word-bad">${escaped}</span>`);
+        warningHtml = warningHtml.replace(new RegExp('\b' + escaped + '\b', 'gi'), `<span class="word-bad">${escaped}</span>`);
       });
       document.getElementById('fbWarningText').innerHTML = warningHtml;
     }
@@ -900,9 +908,12 @@ Azureの機械評価結果（参考）：
     document.getElementById('recBtn').disabled = false;
 
   } catch (e) {
+    console.error('processAnswer error:', e);
     completeProgress();
-    document.getElementById('statusText').innerHTML = `<span style="color:#ef4444">エラー: ${e.message}</span>`;
+    document.getElementById('statusText').innerHTML = `<span style="color:#ef4444">エラー: ${e.message || '不明なエラーが発生しました'}</span>`;
     document.getElementById('recBtn').disabled = false;
+    // 次へボタンとリトライボタンを表示して詰まらないようにする
+    document.getElementById('retryBtn').style.display = 'block';
   }
 }
 
@@ -943,9 +954,13 @@ function pcmToWav(pcmData, sampleRate) {
 }
 
 function arrayBufferToBase64(buffer) {
+  // 大きなバッファでもメモリ効率よく変換
   const bytes = new Uint8Array(buffer);
+  const chunkSize = 8192;
   let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
   return btoa(binary);
 }
 
