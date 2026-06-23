@@ -751,7 +751,7 @@ async function toggleRecord() {
       document.getElementById('statusText').textContent = '録音中...（もう一度押すと停止）';
     }, 300);
 
-    // 15秒で自動停止（分析はしない）
+    // 10秒で自動停止（分析はしない）
     setTimeout(() => {
       if (isRecording) {
         isCancelled = true;   // 分析をスキップするフラグ
@@ -760,9 +760,9 @@ async function toggleRecord() {
         isRecording = false;
         document.getElementById('recBtn').classList.remove('recording');
         document.getElementById('recBtn').textContent = '🎤';
-        document.getElementById('statusText').textContent = '録音が長すぎます。もう一度お試しください。';
+        document.getElementById('statusText').textContent = '録音が長すぎます（10秒以内で話してください）。';
       }
-    }, 15000);
+    }, 10000);
   } catch(e) { alert('マイクを許可してください'); }
 }
 
