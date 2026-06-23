@@ -792,31 +792,24 @@ async function processAnswer(base64, mimeType) {
       `${w.word}(${(w.phonemes||[]).map(p => `/${p.phoneme}/:${p.score}点`).join(',')})`
     ).join(', ');
 
-    const prompt = `あなたはネイティブ英語発音の厳格なコーチです。生徒が「${q.en}」を発音した音声を直接聞いて評価してください。
+    const prompt = `あなたはネイティブ英語発音の厳格なコーチです。Azureの音声評価結果をもとに、日本人学習者へのフィードバックを生成してください。
+お手本文：「${q.en}」
 発音カテゴリ：${cat.label}
 
-Azureの機械評価結果（参考）：
+Azureの評価結果：
 - 総合：${azureData.pronScore}点、精度：${azureData.accuracyScore}点、流暢さ：${azureData.fluencyScore}点、韻律：${azureData.prosodyScore}点
-- 単語別：${wordDetails}
+- 単語別スコア：${wordDetails}
 - 問題音素：${phonemeDetails || 'なし'}
+- 聞き取り結果：${azureData.transcript}
 
-【あなたのタスク】
-1. 音声を直接聞いて、特に${cat.label}に特有のミスを耳で確認する
-2. 以下の日本人特有ミスを重点チェック：
-   - LとR：Rが「ラリルレロ」になっていないか、Lで舌が歯茎に触れているか
-   - TH：「ス/ズ/ダ」で代替していないか
-   - VとB：VでBを使っていないか（上唇ではなく下唇を使うべき）
-   - リンキング：単語が自然につながっているか
-3. Azureが高得点の場合は基本的にそのまま。よほど明らかにネイティブと違う場合のみ adjusted_score を少し下げる
-4. 問題なければ adjusted_score はAzureのスコアのまま
+上記のデータをもとに以下のJSON形式のみで回答（コードブロック不要）:
+{"adjusted_score":${azureData.pronScore},"praise":"良かった点1〜2文（日本語）","warning":"${cat.label}特有の問題を単語・音素レベルで具体的に（問題なければnull）","hint":"次回の改善ポイント1〜2文（問題なければnull）","gemini_bad_words":["問題のあった単語（なければ空配列）"]}`;
 
-以下のJSON形式のみで回答（コードブロック不要）:
-{"adjusted_score":0-100の整数,"praise":"良かった点1〜2文（日本語）","warning":"${cat.label}特有の問題を単語・音素レベルで具体的に（問題なければnull）","hint":"次回の改善ポイント1〜2文（問題なければnull）","gemini_bad_words":["Geminiが問題と判断した単語（なければ空配列）"]}`;
-
+    // GeminiにはAzureの結果テキストだけ送る（音声は送らない→タイムアウト防止）
     const geminiRes = await fetch('/api/correct', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ base64Audio: base64, prompt })
+      body: JSON.stringify({ base64Audio: '', prompt })
     });
     const geminiData = await geminiRes.json();
     let feedback = { adjusted_score: azureData.pronScore, praise: '', warning: null, hint: null, gemini_bad_words: [] };
