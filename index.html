@@ -793,15 +793,12 @@ async function processAnswer(base64, mimeType) {
     const prompt = `あなたはネイティブ英語発音の厳格なコーチです。Azureの音声評価結果をもとに、日本人学習者へのフィードバックを生成してください。
 お手本文：「${q.en}」
 発音カテゴリ：${cat.label}
+聞き取り結果：${azureData.transcript}
+問題のあった単語：${badWordNames.length > 0 ? badWordNames.join(', ') : 'なし'}
+総合評価：精度${azureData.accuracyScore}点、流暢さ${azureData.fluencyScore}点
 
-Azureの評価結果：
-- 総合：${azureData.pronScore}点、精度：${azureData.accuracyScore}点、流暢さ：${azureData.fluencyScore}点、韻律：${azureData.prosodyScore}点
-- 単語別スコア：${wordDetails}
-- 問題音素：${phonemeDetails || 'なし'}
-- 聞き取り結果：${azureData.transcript}
-
-上記のデータをもとに以下のJSON形式のみで回答（コードブロック不要）:
-{"adjusted_score":${azureData.pronScore},"praise":"良かった点1〜2文（日本語）","warning":"${cat.label}特有の問題を単語・音素レベルで具体的に（問題なければnull）","hint":"次回の改善ポイント1〜2文（問題なければnull）","gemini_bad_words":["問題のあった単語（なければ空配列）"]}`;
+上記をもとに以下のJSON形式のみで回答（コードブロック不要）。スコアや点数は絶対に含めないこと：
+{"adjusted_score":${azureData.pronScore},"praise":"良かった点1〜2文（日本語）","warning":"${cat.label}特有の問題を単語名を挙げて具体的に説明。カテゴリがリンキングの場合はカタカナ読みは使わず、「『pick it』は切らずに続けて発音する」「『up and』は息を切らさず一息で読む」のように、どこを繋げるかを日本語で説明すること。スコアや点数は書かない。問題なければnull","hint":"次回の改善ポイント1〜2文。リンキングの場合もカタカナは使わず、意識するポイントを日本語で説明（問題なければnull）","gemini_bad_words":["問題のあった単語（なければ空配列）"]}`;
 
     // GeminiにはAzureの結果テキストだけ送る（音声は送らない→タイムアウト防止）
     const geminiRes = await fetch('/api/correct', {
