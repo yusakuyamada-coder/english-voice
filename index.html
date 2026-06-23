@@ -538,7 +538,7 @@ let currentIndex = 0;
 let scores = [];
 let catScores = {};
 let pendingScore = null;
-let isRecording = false, isCancelled = false, mediaRecorder = null, audioChunks = [], recordingMimeType = "";
+let isRecording = false, isCancelled = false, recordingMimeType = "audio/wav";
 let progressTimer = null;
 let userAudioBlob = null;
 let modelAudio = null;
@@ -685,104 +685,83 @@ function playUserAudio() {
 }
 
 // ── 録音 ────────────────────────────────────────────────────
+// Web Audio API による録音（iOS対応）
+let audioContext = null;
+let scriptProcessor = null;
+let recordingStream = null;
+let pcmChunks = [];
+
 async function toggleRecord() {
   if (isRecording) {
-    mediaRecorder.stop();
-    isRecording = false;
-    document.getElementById('recBtn').classList.remove('recording');
-    document.getElementById('recBtn').textContent = '🎤';
-    document.getElementById('statusText').textContent = 'AI が分析中...';
+    stopRecording();
     return;
   }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    // サポートされる形式を選択
-    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const mimeType = isIOS
-      ? (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4'
-       : MediaRecorder.isTypeSupported('audio/aac') ? 'audio/aac'
-       : 'audio/webm;codecs=opus')
-      : (MediaRecorder.isTypeSupported('audio/wav') ? 'audio/wav'
-       : MediaRecorder.isTypeSupported('audio/webm;codecs=pcm') ? 'audio/webm;codecs=pcm'
-       : 'audio/webm;codecs=opus');
-    console.log('Recording mimeType:', mimeType);
-    recordingMimeType = mimeType;
-    mediaRecorder = new MediaRecorder(stream, {
-      mimeType,
-      audioBitsPerSecond: 16000,
+    recordingStream = await navigator.mediaDevices.getUserMedia({
+      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true }
     });
-    audioChunks = [];
-    mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) audioChunks.push(e.data); };
-    mediaRecorder.onstop = async () => {
-      if (isCancelled || !audioChunks.length) { isCancelled = false; return; }
-      const blob = new Blob(audioChunks, { type: recordingMimeType });
-      userAudioBlob = blob;
 
-      // iPhoneのSafariはPCM変換が不安定なのでスキップ
-      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(recordingStream);
+    scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+    pcmChunks = [];
 
-      const sendBlob = async (b, mime) => {
-        const base64 = await new Promise((resolve, reject) => {
-          const rd = new FileReader();
-          rd.onload = () => resolve(rd.result.split(',')[1]);
-          rd.onerror = reject;
-          rd.readAsDataURL(b);
-        });
-        processAnswer(base64, mime);
-      };
-
-      if (isIOS) {
-        // iOSはそのまま送る
-        console.log('iOS detected, skipping PCM conversion');
-        await sendBlob(blob, recordingMimeType);
-        return;
-      }
-
-      try {
-        // WebM/opusをPCM(WAV)に変換してAzureに送る
-        const arrayBuf = await blob.arrayBuffer();
-        const audioCtx = new AudioContext({ sampleRate: 16000 });
-        const decoded = await audioCtx.decodeAudioData(arrayBuf);
-        await audioCtx.close();
-        const pcmData = decoded.getChannelData(0);
-        const wavBuffer = pcmToWav(pcmData, 16000);
-        const base64 = arrayBufferToBase64(wavBuffer);
-        processAnswer(base64, 'audio/wav');
-      } catch(e) {
-        console.error('PCM変換エラー:', e);
-        try {
-          await sendBlob(blob, recordingMimeType);
-        } catch(e2) {
-          console.error('フォールバックエラー:', e2);
-          completeProgress();
-          document.getElementById('statusText').innerHTML = '<span style="color:#ef4444">音声の処理に失敗しました。もう一度お試しください。</span>';
-          document.getElementById('recBtn').disabled = false;
-        }
-      }
+    scriptProcessor.onaudioprocess = (e) => {
+      if (!isRecording) return;
+      const channelData = e.inputBuffer.getChannelData(0);
+      pcmChunks.push(new Float32Array(channelData));
     };
-    // 0.3秒後に録音開始（Azureが最初の音を取りこぼさないように）
+
+    source.connect(scriptProcessor);
+    scriptProcessor.connect(audioContext.destination);
+
+    isRecording = true;
     document.getElementById('recBtn').classList.add('recording');
     document.getElementById('recBtn').textContent = '⏹';
-    document.getElementById('statusText').textContent = '準備中...';
-    setTimeout(() => {
-      mediaRecorder.start();
-      isRecording = true;
-      document.getElementById('statusText').textContent = '録音中...（もう一度押すと停止）';
-    }, 300);
+    document.getElementById('statusText').textContent = '録音中...（もう一度押すと停止）';
 
-    // 10秒で自動停止（分析はしない）
+    // 10秒で自動停止
     setTimeout(() => {
       if (isRecording) {
-        isCancelled = true;   // 分析をスキップするフラグ
-        audioChunks = [];
-        mediaRecorder.stop();
-        isRecording = false;
-        document.getElementById('recBtn').classList.remove('recording');
-        document.getElementById('recBtn').textContent = '🎤';
+        isCancelled = true;
+        stopRecording();
         document.getElementById('statusText').textContent = '録音が長すぎます（10秒以内で話してください）。';
       }
     }, 10000);
-  } catch(e) { alert('マイクを許可してください'); }
+
+  } catch(e) {
+    console.error('録音エラー:', e);
+    alert('マイクを許可してください');
+  }
+}
+
+function stopRecording() {
+  isRecording = false;
+  document.getElementById('recBtn').classList.remove('recording');
+  document.getElementById('recBtn').textContent = '🎤';
+
+  if (scriptProcessor) { scriptProcessor.disconnect(); scriptProcessor = null; }
+  if (audioContext)     { audioContext.close(); audioContext = null; }
+  if (recordingStream)  { recordingStream.getTracks().forEach(t => t.stop()); recordingStream = null; }
+
+  if (isCancelled) { isCancelled = false; return; }
+  if (!pcmChunks.length) return;
+
+  document.getElementById('statusText').textContent = 'AI が分析中...';
+
+  // PCMチャンクを結合してWAVに変換
+  const totalLen = pcmChunks.reduce((s, c) => s + c.length, 0);
+  const merged = new Float32Array(totalLen);
+  let offset = 0;
+  pcmChunks.forEach(c => { merged.set(c, offset); offset += c.length; });
+
+  const wavBuffer = pcmToWav(merged, 16000);
+
+  // ユーザー音声再生用にblobを保存
+  userAudioBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+
+  const base64 = arrayBufferToBase64(wavBuffer);
+  processAnswer(base64, 'audio/wav');
 }
 
 // ── API 処理 ─────────────────────────────────────────────────
