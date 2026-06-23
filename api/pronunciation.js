@@ -24,8 +24,10 @@ export default async function handler(req, res) {
     };
     const assessmentConfigBase64 = Buffer.from(JSON.stringify(assessmentConfig)).toString('base64');
 
-    const contentType = (mimeType && mimeType.includes('wav')) ? 'audio/wav'
-                      : (mimeType && mimeType.includes('pcm')) ? 'audio/webm;codecs=pcm'
+    const contentType = (mimeType && mimeType.includes('wav'))  ? 'audio/wav'
+                      : (mimeType && mimeType.includes('mp4'))  ? 'audio/mp4'
+                      : (mimeType && mimeType.includes('aac'))  ? 'audio/aac'
+                      : (mimeType && mimeType.includes('pcm'))  ? 'audio/webm;codecs=pcm'
                       : 'audio/webm;codecs=opus';
 
     const response = await fetch(
